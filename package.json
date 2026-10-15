@@ -1,0 +1,55 @@
+{
+  "name": "ntt-auto",
+  "productName": "NTT Auto",
+  "version": "1.0.1",
+  "description": "Crawl video Pinterest -> đăng TikTok Studio",
+  "type": "module",
+  "main": "src/boot.js",
+  "scripts": {
+    "start": "electron .",
+    "build": "electron-builder",
+    "test": "node --test test/pipeline.test.js"
+  },
+  "build": {
+    "appId": "nyxhub.ntt-auto",
+    "productName": "NTT Auto",
+    "artifactName": "${productName}-v${version}.${ext}",
+    "publish": [
+      {
+        "provider": "github",
+        "owner": "quanglv96",
+        "repo": "nyx-tok-auto",
+        "releaseType": "release"
+      }
+    ],
+    "files": [
+      "src/**/*",
+      "package.json"
+    ],
+    "extraResources": [
+      {
+        "from": "src/python",
+        "to": "python"
+      }
+    ],
+    "asar": true,
+    "win": {
+      "target": "nsis"
+    },
+    "nsis": {
+      "oneClick": false,
+      "perMachine": true,
+      "differentialPackage": true,
+      "allowToChangeInstallationDirectory": true
+    }
+  },
+  "dependencies": {
+    "electron-updater": "^6.8.3",
+    "playwright": "^1.58.2"
+  },
+  "devDependencies": {
+    "electron": "^41.2.0",
+    "electron-builder": "^26.8.1"
+  },
+  "license": "ISC"
+}

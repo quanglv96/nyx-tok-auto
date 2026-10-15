@@ -1,0 +1,198 @@
+<!doctype html>
+<html lang="vi">
+<head>
+    <meta charset="utf-8">
+    <title>NTT Auto</title>
+    <meta http-equiv="Content-Security-Policy" content="default-src 'self'; style-src 'self' 'unsafe-inline'; media-src 'self' file:">
+    <style>
+        :root {
+            --bg: #0f1216; --panel: #171b21; --line: #262c35; --text: #e6e9ee; --muted: #8b94a3;
+            --accent: #fe2c55; --ok: #2ecc71; --warn: #f5a623; --err: #ff5a5f; --run: #4aa3ff;
+        }
+        * { box-sizing: border-box; }
+        body { margin: 0; background: var(--bg); color: var(--text); font: 13px/1.45 "Segoe UI", system-ui, sans-serif; height: 100vh; display: flex; flex-direction: column; }
+        header { display: flex; align-items: center; gap: 12px; padding: 12px 18px; border-bottom: 1px solid var(--line); background: var(--panel); }
+        header h1 { font-size: 18px; margin: 0; letter-spacing: .5px; }
+        header h1 span { color: var(--accent); }
+        .chip { padding: 3px 10px; border-radius: 99px; font-size: 12px; background: var(--line); color: var(--muted); }
+        .chip.ok { background: rgba(46,204,113,.15); color: var(--ok); }
+        .chip.err { background: rgba(255,90,95,.15); color: var(--err); }
+        .chip.run { background: rgba(74,163,255,.15); color: var(--run); }
+        .spacer { flex: 1; }
+        button { background: var(--line); color: var(--text); border: 0; border-radius: 6px; padding: 7px 14px; cursor: pointer; font: inherit; }
+        button:hover:not(:disabled) { filter: brightness(1.25); }
+        button:disabled { opacity: .45; cursor: default; }
+        button.primary { background: var(--accent); font-weight: 600; }
+        button.danger { background: #3a1d22; color: var(--err); }
+        main { flex: 1; display: grid; grid-template-columns: 380px 1fr; min-height: 0; }
+        aside { border-right: 1px solid var(--line); overflow-y: auto; padding: 14px 18px; }
+        aside h2, section h2 { font-size: 12px; text-transform: uppercase; letter-spacing: 1px; color: var(--muted); margin: 14px 0 8px; }
+        label { display: block; margin: 10px 0 4px; color: var(--muted); font-size: 12px; }
+        input, textarea, select { width: 100%; background: var(--bg); color: var(--text); border: 1px solid var(--line); border-radius: 6px; padding: 7px 9px; font: inherit; }
+        input:focus, textarea:focus { outline: none; border-color: var(--accent); }
+        textarea { resize: vertical; min-height: 90px; font-family: Consolas, monospace; font-size: 12px; }
+        .row { display: flex; gap: 6px; }
+        .row > input { flex: 1; }
+        .url-item { background: var(--panel); border: 1px solid var(--line); border-radius: 6px; padding: 6px; margin-bottom: 6px; }
+        .url-item .kw { display: flex; gap: 6px; margin-bottom: 4px; font-size: 12px; }
+        .url-item .kw small { color: var(--muted); }
+        .url-item input { font: 11px Consolas, monospace; }
+        .grid3 { display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px; }
+        .hint { color: var(--muted); font-size: 11px; margin-top: 3px; }
+        .actions { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 14px; }
+        section { display: flex; flex-direction: column; min-height: 0; padding: 0 18px 14px; }
+        .steps { display: grid; grid-template-columns: repeat(6, 1fr); gap: 8px; }
+        .step { background: var(--panel); border: 1px solid var(--line); border-radius: 8px; padding: 9px 10px; min-height: 74px; border-top: 3px solid var(--line); }
+        .step b { display: block; font-size: 12px; }
+        .step small { color: var(--muted); font-size: 11px; word-break: break-all; display: block; margin-top: 3px; max-height: 32px; overflow: hidden; }
+        .step.running { border-top-color: var(--run); }
+        .step.ok { border-top-color: var(--ok); }
+        .step.error { border-top-color: var(--err); }
+        .stats { display: grid; grid-template-columns: repeat(5, 1fr); gap: 8px; }
+        .stat { background: var(--panel); border: 1px solid var(--line); border-radius: 8px; padding: 9px 12px; }
+        .stat div { font-size: 22px; font-weight: 600; font-variant-numeric: tabular-nums; }
+        .stat span { color: var(--muted); font-size: 11px; }
+        .logbar { display: flex; align-items: center; gap: 8px; }
+        .logbar h2 { flex: 1; }
+        #logs { flex: 1; min-height: 0; overflow-y: auto; background: #0a0c0f; border: 1px solid var(--line); border-radius: 8px; padding: 8px 10px; font: 12px/1.5 Consolas, monospace; white-space: pre-wrap; word-break: break-all; }
+        label.check { color: var(--text); display: flex; align-items: center; gap: 6px; margin: 6px 0; }
+        label.check input { width: auto; }
+        .tabs { display: flex; gap: 6px; padding: 12px 0 2px; }
+        .tabs button.active { background: var(--accent); font-weight: 600; }
+        .view { flex: 1; display: flex; flex-direction: column; min-height: 0; }
+        .view[hidden] { display: none; }
+        #testView { overflow-y: auto; }
+        .compare { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; margin-top: 10px; }
+        .compare figure { margin: 0; background: var(--panel); border: 1px solid var(--line); border-radius: 8px; padding: 8px; }
+        .compare figcaption { color: var(--muted); font-size: 12px; margin-bottom: 6px; }
+        .compare video { width: 100%; height: 52vh; background: #000; border-radius: 6px; }
+        #testCmd { background: #0a0c0f; border: 1px solid var(--line); border-radius: 8px; padding: 8px 10px; font: 11px/1.5 Consolas, monospace; white-space: pre-wrap; word-break: break-all; color: #c3c9d3; }
+        #testCmd:empty { display: none; }
+        #logs .warn { color: var(--warn); } #logs .error { color: var(--err); } #logs .ok { color: var(--ok); } #logs .info { color: #c3c9d3; }
+    </style>
+</head>
+<body>
+<header>
+    <h1>NTT <span>Auto</span></h1>
+    <span class="chip" id="version"></span>
+    <span class="chip" id="envChip">Đang kiểm tra môi trường…</span>
+    <span class="chip" id="stateChip">Đang dừng</span>
+    <span class="chip" id="updChip" hidden></span>
+    <div class="spacer"></div>
+    <button id="btnStart" class="primary">▶ Bắt đầu</button>
+    <button id="btnStop" class="danger" disabled>■ Dừng</button>
+</header>
+<main>
+    <aside>
+        <h2>Cấu hình</h2>
+        <label>Thư mục dữ liệu (video, id đã crawl, log, chrome profile)</label>
+        <div class="row"><input id="dataDir"><button data-pick="dataDir">…</button></div>
+
+        <label>URL Pinterest (<span id="urlCount">0</span>) — mỗi vòng dùng ngẫu nhiên, không lặp</label>
+        <input id="searchUrls" type="hidden">
+        <div id="urlList"></div>
+        <div class="row"><input id="urlNew" placeholder="Dán URL vào đây — tự thêm (gõ tay thì Enter)"><button id="btnUrlAdd" title="Thêm">＋</button></div>
+        <div class="hint">Sửa trực tiếp trong ô, ✕ để xoá — tự lưu ngay.</div>
+
+        <label>Caption TikTok</label>
+        <input id="caption">
+
+        <div class="grid3">
+            <div><label>Video / URL</label><input id="videosPerUrl" type="number" min="1"></div>
+            <div><label>Chờ (phút)</label><input id="delayMinutes" type="number" min="0"></div>
+            <div><label>Cuộn tối đa</label><input id="maxScrolls" type="number" min="1"></div>
+        </div>
+
+        <h2>Xử lý video (ffmpeg)</h2>
+        <label class="check"><input type="checkbox" id="tfRandom"> 🎲 Random hiệu ứng mỗi video (chọn ngẫu nhiên 1 hoặc nhiều hiệu ứng trong các ô tick bên dưới; không tick ô nào = random tất cả)</label>
+        <label class="check"><input type="checkbox" id="tfRotate"> Xoay 1–2° + zoom che viền</label>
+        <label class="check"><input type="checkbox" id="tfColor"> Màu: contrast +3–5%, saturation +5%, brightness +2%</label>
+        <label class="check"><input type="checkbox" id="tfFps"> Đổi FPS (24 / 25)</label>
+        <label class="check"><input type="checkbox" id="tfAudio"> Audio: tốc độ + pitch ±2–3%, 44100Hz</label>
+        <label class="check"><input type="checkbox" id="tfPip"> Picture-in-Picture: đè góc trên phải, rộng 25–30% (reaction, hoặc chính video gốc nếu chưa chọn reaction)</label>
+        <label>Video reaction cho PiP — tuỳ chọn (1 file, hoặc thư mục để chọn ngẫu nhiên)</label>
+        <div class="row"><input id="reactionPath"><button data-pick-file="reactionPath" data-kind="video" title="Chọn file">🎞</button><button data-pick="reactionPath" title="Chọn thư mục">📁</button></div>
+        <div class="hint">Kết hợp tự do các tuỳ chọn. Không bật gì = đăng video gốc, không xử lý. Có xử lý thì video vừa khung 9:16 (nền mờ nếu khác tỉ lệ), xuất 1080x1920, libx264 CRF 20 + AAC. Reaction ngắn hơn sẽ lặp lại. Thử trước ở tab "Test xử lý video".</div>
+
+        <h2>Lịch đăng</h2>
+        <label style="color:var(--text)"><input type="checkbox" id="scheduleEnabled" style="width:auto"> Chỉ đăng trong các khung giờ</label>
+        <input id="scheduleTimes" placeholder="08:00-09:00, 12:00-13:00, 20:00-21:30">
+        <label>Số video / ngày (0 = dùng đúng các khung trên)</label>
+        <input id="postsPerDay" type="number" min="0">
+        <div class="hint">Nhập &gt; 0 thì app lấy khoảng từ giờ đầu tới giờ cuối ở trên (vd "05:00-23:00") rồi tự chia thành n khung đều nhau.</div>
+        <div class="hint">Mỗi khung đăng 1 video vào một phút ngẫu nhiên trong khung; ghi "20:00" là đăng đúng giờ đó. Tới phút đó mới crawl + tải + đăng. Bật lịch thì "Chờ (phút)" là khoảng cách tối thiểu giữa 2 video.</div>
+        <label style="color:var(--text)"><input type="checkbox" id="autoStart" style="width:auto"> Khởi động cùng Windows</label>
+        <label style="color:var(--text)"><input type="checkbox" id="autoRun" style="width:auto"> Mở app là tự bắt đầu chạy</label>
+
+        <h2>Chrome</h2>
+        <label>Đường dẫn chrome.exe (trống = tự tìm)</label>
+        <div class="row"><input id="chromePath"><button data-pick-file="chromePath">…</button></div>
+        <label>Chrome profile (trống = &lt;thư mục dữ liệu&gt;/chrome-profile)</label>
+        <div class="row"><input id="chromeProfileDir"><button data-pick="chromeProfileDir">…</button></div>
+        <div class="hint">Chrome 136+ chặn tự động hoá trên profile mặc định "User Data" — nên dùng profile riêng và đăng nhập TikTok 1 lần bằng nút bên dưới. Đóng mọi cửa sổ Chrome đang dùng profile này trước khi chạy.</div>
+
+        <h2>Telegram</h2>
+        <label>Bot token</label>
+        <input id="telegramToken" type="password">
+        <label>Admin (chat id hoặc username)</label>
+        <input id="telegramAdmin">
+        <div class="hint">Dùng username thì admin phải nhắn /start cho bot trước.</div>
+
+        <div class="actions">
+            <button id="btnSave" class="primary">💾 Lưu</button>
+            <button id="btnChrome">🔐 Mở Chrome đăng nhập</button>
+            <button id="btnTele">🔔 Test Telegram</button>
+            <button id="btnData">📁 Mở thư mục</button>
+            <button id="btnEnv">🔄 Kiểm tra lại môi trường</button>
+        </div>
+    </aside>
+    <section>
+        <nav class="tabs">
+            <button data-view="dashView" class="active">Tiến trình</button>
+            <button data-view="testView">🧪 Test xử lý video</button>
+        </nav>
+        <div class="view" id="testView" hidden>
+            <label>Link pin Pinterest / link video (m3u8, mp4…) hoặc file trên máy</label>
+            <div class="row">
+                <input id="testSource" placeholder="https://www.pinterest.com/pin/...">
+                <button data-pick-file="testSource" data-kind="video">📂 File</button>
+                <button id="btnTest" class="primary">▶ Tải & xử lý</button>
+            </div>
+            <div class="hint">Dùng các tuỳ chọn ở mục "Xử lý video" bên trái (không cần Lưu). Link đã tải sẽ dùng lại bản gốc, chỉ xử lý lại. Mỗi lần chạy random góc xoay/màu/FPS/pitch khác nhau; bật 🎲 thì random cả bộ hiệu ứng.</div>
+            <div class="hint" id="testStatus"></div>
+            <div class="compare">
+                <figure><figcaption>Gốc <small id="testInInfo"></small></figcaption><video id="testIn" controls loop muted></video></figure>
+                <figure><figcaption>Đã xử lý <small id="testOutInfo"></small></figcaption><video id="testOut" controls loop></video></figure>
+            </div>
+            <div class="actions">
+                <button id="btnTestPlay">⏯ Phát / dừng cả 2</button>
+                <button id="btnTestRestart">⏮ Chạy lại từ đầu</button>
+                <button id="btnTestAudio">🔊 Tiếng: đã xử lý</button>
+                <button id="btnTestShow" disabled>📁 Mở file đã xử lý</button>
+                <button id="btnTestCopy" disabled>📋 Copy lệnh ffmpeg</button>
+            </div>
+            <pre id="testCmd"></pre>
+        </div>
+        <div class="view" id="dashView">
+        <h2>Tiến trình</h2>
+        <div class="steps" id="steps"></div>
+        <h2>Thống kê</h2>
+        <div class="stats">
+            <div class="stat"><div id="st-total">0</div><span>ID đã crawl (tổng)</span></div>
+            <div class="stat"><div id="st-found">0</div><span>Video mới tìm thấy</span></div>
+            <div class="stat"><div id="st-downloaded">0</div><span>Đã tải</span></div>
+            <div class="stat"><div id="st-uploaded">0</div><span>Đã đăng TikTok</span></div>
+            <div class="stat"><div id="st-failed">0</div><span>Lỗi</span></div>
+        </div>
+        <div class="logbar">
+            <h2>Log</h2>
+            <label><input type="checkbox" id="autoScroll" checked style="width:auto"> Tự cuộn</label>
+            <button id="btnClear">Xoá</button>
+        </div>
+        <div id="logs"></div>
+        </div>
+    </section>
+</main>
+<script src="renderer.js"></script>
+</body>
+</html>

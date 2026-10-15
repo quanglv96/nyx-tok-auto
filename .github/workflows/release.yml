@@ -1,0 +1,36 @@
+name: Build & Release
+
+on:
+  push:
+    tags:
+      - 'v*.*.*'
+
+jobs:
+  release:
+    runs-on: windows-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Build & Publish
+        run: npx electron-builder --win --publish always
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+      # Bản chỉ-code cho máy đã cài: updater tải file này thay vì cả bộ cài (khi dependencies không đổi)
+      - name: Upload code-only update
+        shell: bash
+        run: |
+          tar -czf code.tgz package.json src
+          gh release upload "$GITHUB_REF_NAME" code.tgz --clobber
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
