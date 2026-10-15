@@ -120,7 +120,25 @@ async function waitForVideoCheck(page) {
         if (s.state !== 'checking') return log(TAG, `Kiểm tra video: ${s.state}`);
         await sleep(3000);
     }
-    logWarn(TAG, 'Kiểm tra video quá lâu — vẫn đăng');
+    logWarn(TAG, `Kiểm tra video quá ${CHECK_TIMEOUT_MS / 60_000} phút — tắt kiểm tra rồi đăng`);
+    await turnOffVideoCheck(page);
+}
+
+// Switch kiểm tra nội dung: lấy switch đang bật gần khối .status-result nhất (id switch là động)
+async function turnOffVideoCheck(page) {
+    const found = await page.evaluate(() => {
+        let node = document.querySelector('.status-result[data-show="true"]') ?? document.querySelector('.status-result');
+        while (node && node !== document.body) {
+            const sw = node.querySelector('.Switch__content[aria-checked="true"]');
+            if (sw) return sw.setAttribute('data-ntt-check-switch', '1'), true;
+            node = node.parentElement;
+        }
+        return false;
+    });
+    if (!found) return logWarn(TAG, 'Không tìm thấy switch kiểm tra video đang bật');
+    await page.locator('[data-ntt-check-switch="1"]').click().catch(e => logWarn(TAG, `Bấm tắt switch lỗi: ${e.message}`));
+    await sleep(1000);
+    log(TAG, 'Đã tắt switch kiểm tra video');
 }
 
 // Xác nhận thành công = rời trang /upload (redirect về Studio/profile) hoặc toast thành công
