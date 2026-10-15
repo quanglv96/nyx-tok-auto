@@ -1,10 +1,11 @@
-// Luồng chính B1 → B6, lặp qua danh sách URL Pinterest cho tới khi bấm Dừng
+// Luồng chính B1 → B7, lặp qua danh sách URL Pinterest cho tới khi bấm Dừng
 import fs from 'fs';
 import path from 'path';
 import {spawn} from 'child_process';
 import {bus, log, logOk, logWarn, logError, setStep} from './logger.js';
 import {openChrome} from './chrome.js';
 import {uploadToTiktok} from './tiktok.js';
+import {uploadToFacebook} from './facebook.js';
 import {sendTelegram} from './telegram.js';
 import {transformVideo, tfEnabled, tfTag, randomOpts} from './transform.js';
 
@@ -333,29 +334,41 @@ ${err.message}`);
         }
     }
 
-    // B5 + B6
+    // B5 TikTok → B6 Facebook (đăng dù TikTok lỗi) → B7 thông báo & xoá file
     async #upload(file, v) {
-        setStep(5, 'running', `video ${v.id}`);
-        try {
-            await uploadToTiktok(this.ctx, file, this.cfg.caption ?? '');
-        } catch (err) {
-            this.stats.failed++;
-            this.#emitStats();
-            setStep(5, 'error', err.message);
-            logError('B5', `Upload lỗi ${v.id}: ${err.message}`);
-            await this.#notify(`❌ B5 đăng TikTok thất bại\nID: ${v.id}\nLỗi: ${err.message}`);
-            return false;
-        }
+        const tiktok = this.cfg.tiktokEnabled
+            ? await this.#post(5, 'TikTok', v, () => uploadToTiktok(this.ctx, file, this.cfg.caption ?? ''))
+            : (setStep(5, 'ok', 'bỏ qua (đã tắt)'), logWarn('B5', 'Bỏ qua đăng TikTok (đã tắt trong cấu hình)'), false);
+        const facebook = this.cfg.fbEnabled && this.running
+            && await this.#post(6, 'Facebook', v, () => uploadToFacebook(this.ctx, file, this.cfg.fbHashtags || this.cfg.caption));
+        fs.rmSync(file, {force: true});
+        logOk('B7', `🗑️ Đã xóa ${path.basename(file)}`);
+        if (!tiktok && !facebook) return false;
+
         this.stats.uploaded++;
         this.lastPostAt = Date.now();
         this.#emitStats();
-        setStep(5, 'ok', `video ${v.id}`);
+        setStep(7, 'ok', `xong video ${v.id}`);
+        return true;
+    }
 
-        setStep(6, 'running', 'gửi thông báo & xóa file');
-        await this.#notify(`✅ Đăng video thành công\nID Pinterest: ${v.id}\nĐã đăng phiên này: ${this.stats.uploaded}`);
-        fs.rmSync(file, {force: true});
-        logOk('B6', `🗑️ Đã xóa ${path.basename(file)}`);
-        setStep(6, 'ok', `xong video ${v.id}`);
+    async #post(step, name, v, fn) {
+        setStep(step, 'running', `video ${v.id}`);
+        try {
+            await fn();
+        } catch (err) {
+            this.stats.failed++;
+            this.#emitStats();
+            setStep(step, 'error', err.message);
+            logError(`B${step}`, `Đăng ${name} lỗi ${v.id}: ${err.message}`);
+            await this.#notify(`❌ B${step} đăng ${name} thất bại
+ID: ${v.id}
+Lỗi: ${err.message}`);
+            return false;
+        }
+        setStep(step, 'ok', `video ${v.id}`);
+        await this.#notify(`✅ Đăng ${name} thành công
+ID Pinterest: ${v.id}`);
         return true;
     }
 

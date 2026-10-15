@@ -41,7 +41,7 @@
         .hint { color: var(--muted); font-size: 11px; margin-top: 3px; }
         .actions { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 14px; }
         section { display: flex; flex-direction: column; min-height: 0; padding: 0 18px 14px; }
-        .steps { display: grid; grid-template-columns: repeat(6, 1fr); gap: 8px; }
+        .steps { display: grid; grid-template-columns: repeat(7, 1fr); gap: 8px; }
         .step { background: var(--panel); border: 1px solid var(--line); border-radius: 8px; padding: 9px 10px; min-height: 74px; border-top: 3px solid var(--line); }
         .step b { display: block; font-size: 12px; }
         .step small { color: var(--muted); font-size: 11px; word-break: break-all; display: block; margin-top: 3px; max-height: 32px; overflow: hidden; }
@@ -94,8 +94,11 @@
         <div class="row"><input id="urlNew" placeholder="Dán URL vào đây — tự thêm (gõ tay thì Enter)"><button id="btnUrlAdd" title="Thêm">＋</button></div>
         <div class="hint">Sửa trực tiếp trong ô, ✕ để xoá — tự lưu ngay.</div>
 
+        <label style="color:var(--text)"><input type="checkbox" id="tiktokEnabled" style="width:auto"> Đăng TikTok (bỏ tick để test riêng Facebook)</label>
         <label>Caption TikTok</label>
         <input id="caption">
+        <label style="color:var(--text)"><input type="checkbox" id="fbEnabled" style="width:auto"> Đăng thước phim Facebook (Business Suite) sau TikTok</label>
+        <input id="fbHashtags" placeholder="Hashtag Facebook: #meo #cute #fyp — trống = dùng #tag trong caption">
 
         <div class="grid3">
             <div><label>Video / URL</label><input id="videosPerUrl" type="number" min="1"></div>

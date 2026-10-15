@@ -11,7 +11,8 @@ Electron app: crawl video Pinterest → tải bằng yt-dlp/ffmpeg → đăng Ti
 | B4 | `src/python/downloader.py` (yt-dlp + ffmpeg, best quality, gộp HLS → .mp4). Lỗi → quay lại B3 lấy video khác, id lỗi vẫn được lưu |
 | B4b | `src/transform.js` — ffmpeg biến đổi video, các tuỳ chọn kết hợp tự do (xoay+zoom, màu, FPS, audio pitch + bố cục gốc / split-screen / PiP reaction), xuất 1080x1920 libx264 CRF 20 + AAC. Lỗi → bỏ video, không đăng bản gốc. Thử trước ở tab "Test chỉnh sửa video" (file ra `<thư mục dữ liệu>/test`) |
 | B5 | Upload lên `tiktok.com/tiktokstudio/upload` (logic port từ fb-crawler)                                                            |
-| B6 | Xác nhận đăng thành công → Telegram cho admin → xoá file .mp4                                                                     |
+| B6 | `src/facebook.js` — đăng thước phim qua `business.facebook.com/latest/posts/all_clips` (chạy dù TikTok thành công/thất bại, tắt bằng ô "Đăng thước phim Facebook") |
+| B7 | Telegram cho admin kết quả từng nền tảng → xoá file .mp4                                                                          |
 
 ## Lịch đăng
 Bật "Chỉ đăng trong các khung giờ", nhập ví dụ `08:00-09:00, 12:00-13:00, 20:00-21:30`. Mỗi khung đăng **1 video** vào một phút ngẫu nhiên trong khung (`20:00` = đúng giờ). Video được crawl + tải sẵn, tới giờ hẹn mới đăng; app mở giữa khung thì random trong phần còn lại, hết khung hôm nay thì sang hôm sau.
