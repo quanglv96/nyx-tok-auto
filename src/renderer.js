@@ -2,9 +2,9 @@ const {ipcRenderer} = require('electron');
 
 const $ = id => document.getElementById(id);
 const FIELDS = ['dataDir', 'searchUrls', 'caption', 'tiktokEnabled', 'fbEnabled', 'fbHashtags', 'videosPerUrl', 'delayMinutes', 'maxScrolls',
-    'chromePath', 'chromeProfileDir', 'telegramToken', 'telegramAdmin', 'scheduleEnabled', 'scheduleTimes', 'postsPerDay', 'autoStart', 'autoRun',
+    'chromePath', 'chromeProfileDir', 'telegramToken', 'telegramAdmin', 'scheduleEnabled', 'scheduleTimes', 'postsPerDay', 'humanEnabled', 'humanLikeRate', 'humanTimes', 'humanPerDay', 'humanMinutes', 'autoStart', 'autoRun',
     'tfRandom', 'tfRotate', 'tfColor', 'tfFps', 'tfAudio', 'tfPip', 'reactionPath'];
-const STEPS = ['B1 Truy cập Pinterest', 'B2 Bắt API', 'B3 Lọc video mới', 'B4 Tải video', 'B5 Đăng TikTok', 'B6 Đăng Facebook', 'B7 Thông báo & xoá'];
+const STEPS = ['B1 Truy cập nguồn', 'B2 Quét video', 'B3 Lọc video mới', 'B4 Tải video', 'B5 Đăng TikTok', 'B6 Đăng Facebook', 'B7 Thông báo & xoá'];
 const MAX_LOG_LINES = 1500;
 
 // ---------- Steps ----------
@@ -29,14 +29,16 @@ function paint(n, status, detail) {
 }
 
 // ---------- Logs ----------
+let testBusy = false; // đang chạy test tính năng → log hiện thêm ở tab Test
 function addLog({type, msg}) {
-    const box = $('logs');
-    const line = document.createElement('div');
-    line.className = type;
-    line.textContent = msg;
-    box.appendChild(line);
-    while (box.childElementCount > MAX_LOG_LINES) box.firstChild.remove();
-    if ($('autoScroll').checked) box.scrollTop = box.scrollHeight;
+    for (const box of testBusy ? [$('logs'), $('testLogs')] : [$('logs')]) {
+        const line = document.createElement('div');
+        line.className = type;
+        line.textContent = msg;
+        box.appendChild(line);
+        while (box.childElementCount > MAX_LOG_LINES) box.firstChild.remove();
+        if ($('autoScroll').checked) box.scrollTop = box.scrollHeight;
+    }
 }
 
 // ---------- Config ----------
@@ -176,9 +178,9 @@ ipcRenderer.on('updater', (_, u) => {
     chip.textContent = text ?? '';
 });
 
-// ---------- Tabs ----------
+// ---------- Tabs (nav chính + tab con trong Cấu hình / Test: mỗi nav chỉ bật/tắt các view của nó) ----------
 document.querySelectorAll('[data-view]').forEach(btn => btn.onclick = () => {
-    document.querySelectorAll('[data-view]').forEach(b => {
+    btn.parentElement.querySelectorAll('[data-view]').forEach(b => {
         b.classList.toggle('active', b === btn);
         $(b.dataset.view).hidden = b !== btn;
     });
@@ -245,6 +247,30 @@ $('btnTestAudio').onclick = () => {
 };
 $('btnTestShow').onclick = () => call('show-file', testResult.output);
 $('btnTestCopy').onclick = () => navigator.clipboard.writeText(testResult.cmd);
+// ---------- Test tính năng: crawl / đăng TikTok / đăng Facebook / human ----------
+const TESTS = {
+    crawl: () => call('test-crawl', $('tCrawlUrl').value.trim() || urls[0] || '', readForm()).then(r => r && ($('tFile').value = r.file)),
+    tiktok: () => confirm('Đăng THẬT video này lên TikTok?') && call('test-tiktok', $('tFile').value.trim(), readForm()),
+    facebook: () => confirm('Đăng THẬT video này lên Facebook?') && call('test-facebook', $('tFile').value.trim(), readForm()),
+    'human-tiktok': () => call('test-human', 'tiktok', $('tHumanMin').value, readForm()),
+    'human-facebook': () => call('test-human', 'facebook', $('tHumanMin').value, readForm()),
+};
+document.querySelectorAll('[data-test]').forEach(btn => btn.onclick = async () => {
+    const all = document.querySelectorAll('.tbtn');
+    all.forEach(b => b.disabled = true);
+    $('btnTestStop').disabled = false;
+    $('testLogs').innerHTML = '';
+    testBusy = true;
+    try {
+        await TESTS[btn.dataset.test]();
+    } finally {
+        testBusy = false;
+        all.forEach(b => b.disabled = false);
+        $('btnTestStop').disabled = true;
+    }
+});
+$('btnTestStop').onclick = () => call('test-stop');
+
 ipcRenderer.on('test-progress', (_, text) => $('testStatus').textContent = text);
 
 loadConfig();

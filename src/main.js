@@ -7,6 +7,10 @@ import {loadConfig, saveConfig} from './config.js';
 import {ensureEnv} from './ensureEnv.js';
 import crypto from 'crypto';
 import {Pipeline, downloadVideo} from './pipeline.js';
+import {crawlerFor} from './crawlers/index.js';
+import {uploadToTiktok} from './tiktok.js';
+import {uploadToFacebook} from './facebook.js';
+import {humanSession} from './human.js';
 import {transformVideo, tfTag, cmdLine, randomOpts} from './transform.js';
 import {openChrome} from './chrome.js';
 import {sendTelegram} from './telegram.js';
@@ -20,6 +24,7 @@ let pipeline = null;
 let loginCtx = null;
 let envPromise = null;
 let autoStarted = false;
+let testRunning = false; // test tính năng đang chạy — bấm Dừng test thì false
 
 const send = (channel, data) => win?.webContents.send(channel, data);
 for (const ch of ['log', 'step', 'stats']) bus.on(ch, d => send(ch, d));
@@ -146,17 +151,61 @@ ipcMain.handle('start', startPipeline);
 
 ipcMain.handle('stop', () => pipeline?.stop());
 
-ipcMain.handle('open-chrome', async () => {
-    if (pipeline?.running) throw new Error('Đang chạy — dừng trước khi mở Chrome');
+// Chrome dùng cho đăng nhập & test tính năng (cùng profile với pipeline → đang chạy thì dùng chung Chrome của pipeline)
+async function toolChrome() {
+    if (pipeline?.running) {
+        if (!pipeline.ctx) throw new Error('Pipeline đang mở Chrome — thử lại sau vài giây');
+        return pipeline.ctx;
+    }
     if (!loginCtx) {
         loginCtx = await openChrome(loadConfig());
         loginCtx.on('close', () => loginCtx = null);
     }
-    const pinterest = loginCtx.pages()[0] ?? await loginCtx.newPage();
+    return loginCtx;
+}
+
+ipcMain.handle('open-chrome', async () => {
+    const ctx = await toolChrome();
+    const pinterest = ctx.pages()[0] ?? await ctx.newPage();
     await pinterest.goto('https://www.pinterest.com/login/');
-    await (await loginCtx.newPage()).goto('https://www.tiktok.com/tiktokstudio/upload');
-    log('CHROME', 'Đã mở Chrome profile — đăng nhập Pinterest + TikTok rồi đóng cửa sổ Chrome');
+    await (await ctx.newPage()).goto('https://www.tiktok.com/tiktokstudio/upload');
+    log('CHROME', 'Đã mở Chrome profile — đăng nhập Pinterest + TikTok + Facebook rồi đóng cửa sổ Chrome');
 });
+
+// ---------- Test tính năng: chạy riêng từng bước trên Chrome đăng nhập, cfg lấy từ form (chưa cần Lưu) ----------
+async function runTest(name, fn) {
+    if (testRunning) throw new Error('Đang chạy 1 test khác');
+    testRunning = true;
+    log('TEST', `▶️ ${name}`);
+    try {
+        const res = await fn(await toolChrome());
+        logOk('TEST', `Xong: ${name}`);
+        return res;
+    } finally {
+        testRunning = false;
+    }
+}
+
+// Crawl tới video đầu tiên (không đối chiếu / không ghi crawled_ids) rồi tải về thư mục test
+ipcMain.handle('test-crawl', (_, url, cfg) => runTest(`Crawl ${url}`, async ctx => {
+    const env = await checkEnv();
+    const dir = path.join(loadConfig().dataDir, 'test');
+    const videos = crawlerFor(url).crawl(ctx, url, {isRunning: () => testRunning, maxScrolls: Math.max(1, Number(cfg.maxScrolls) || 20)});
+    for await (const v of videos) {
+        log('TEST', `⬇️ Tải ${v.id}: ${v.url}`);
+        const file = await downloadVideo(env, v.url, dir, `crawl_${v.id}.mp4`, {onLog: line => log('TEST', line)});
+        if (!file) throw new Error(`Tải video ${v.id} lỗi — xem log`);
+        return {...v, file};
+    }
+    throw new Error(testRunning ? 'Không tìm thấy video nào' : 'Đã dừng');
+}));
+
+const needFile = file => { if (!file || !fs.existsSync(file)) throw new Error('Chọn file video để đăng'); };
+ipcMain.handle('test-tiktok', (_, file, cfg) => (needFile(file), runTest('Đăng TikTok', ctx => uploadToTiktok(ctx, file, cfg.caption ?? ''))));
+ipcMain.handle('test-facebook', (_, file, cfg) => (needFile(file), runTest('Đăng Facebook', ctx => uploadToFacebook(ctx, file, cfg.fbHashtags || cfg.caption))));
+ipcMain.handle('test-human', (_, site, minutes, cfg) => runTest(`Human ${site} ${minutes} phút`, ctx =>
+    humanSession(ctx, site, Date.now() + Math.max(1, Number(minutes) || 3) * 60_000, () => testRunning, Number(cfg.humanLikeRate) || 0)));
+ipcMain.handle('test-stop', () => { if (testRunning) log('TEST', '⏹️ Đang dừng test...'); testRunning = false; });
 
 ipcMain.handle('test-telegram', async () => {
     if (!(await sendTelegram(loadConfig(), '🔔 Test thông báo từ NTT Auto'))) throw new Error('Chưa nhập Bot token / Admin');

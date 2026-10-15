@@ -3,7 +3,10 @@ import assert from 'node:assert/strict';
 import fs from 'fs';
 import os from 'os';
 import path from 'path';
-import {extractVideos, IdStore, parseSchedule, pickSlot, shuffle, splitSlots} from '../src/pipeline.js';
+import {IdStore, parseSchedule, pickSlot, shuffle, splitSlots} from '../src/pipeline.js';
+import {extractVideos} from '../src/crawlers/pinterest.js';
+import {crawlerFor} from '../src/crawlers/index.js';
+import {pickHumanSession, parseMinutes} from '../src/human.js';
 
 test('extractVideos lấy id + videoUrl, bỏ event không có video', () => {
     const json = {resource: {options: {events: [
@@ -136,4 +139,25 @@ test('shuffle: giữ đủ phần tử, đổi thứ tự theo rand, không sử
     assert.deepEqual(out, ['b', 'c', 'd', 'a']);
     assert.deepEqual([...out].sort(), src);
     assert.deepEqual(src, ['a', 'b', 'c', 'd']);
+});
+
+test('pickHumanSession: lo–hi phút, chừa 2 phút trước giờ đăng', () => {
+    const M = 60_000, day = new Date(2026, 0, 1, 10, 0).getTime();
+    assert.equal(pickHumanSession(day, day + 3 * M), null);
+    assert.equal(pickHumanSession(day, day + 120 * M, [3, 12], () => 0), day + 3 * M);
+    assert.equal(pickHumanSession(day, day + 120 * M, [3, 12], () => 1), day + 12 * M);
+    assert.equal(pickHumanSession(day, day + 8 * M, [3, 12], () => 1), day + 6 * M);
+    assert.equal(pickHumanSession(day, day + 120 * M, [5, 5], () => 0.7), day + 5 * M);
+});
+
+test('parseMinutes đọc "3-12" / "5", báo lỗi khi sai', () => {
+    assert.deepEqual(parseMinutes('3-12'), [3, 12]);
+    assert.deepEqual(parseMinutes(' 5 '), [5, 5]);
+    for (const bad of ['', '12-3', 'abc', '0-5']) assert.throws(() => parseMinutes(bad));
+});
+
+test('crawlerFor chọn crawler theo host, nguồn lạ thì báo lỗi', () => {
+    assert.equal(crawlerFor('https://www.pinterest.com/search/videos/?q=a').name, 'Pinterest');
+    assert.equal(crawlerFor('https://vn.pinterest.com/pin/1/').name, 'Pinterest');
+    assert.throws(() => crawlerFor('https://www.xiaohongshu.com/explore'), /Chưa hỗ trợ/);
 });

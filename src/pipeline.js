@@ -1,4 +1,4 @@
-// Luồng chính B1 → B7, lặp qua danh sách URL Pinterest cho tới khi bấm Dừng
+// Luồng chính B1 → B7, lặp qua danh sách URL nguồn (Pinterest, ... — xem src/crawlers) cho tới khi bấm Dừng
 import fs from 'fs';
 import path from 'path';
 import {spawn} from 'child_process';
@@ -6,28 +6,12 @@ import {bus, log, logOk, logWarn, logError, setStep} from './logger.js';
 import {openChrome} from './chrome.js';
 import {uploadToTiktok} from './tiktok.js';
 import {uploadToFacebook} from './facebook.js';
+import {crawlerFor} from './crawlers/index.js';
+import {humanSession, pickHumanSession, parseMinutes} from './human.js';
 import {sendTelegram} from './telegram.js';
 import {transformVideo, tfEnabled, tfTag, randomOpts} from './transform.js';
 
-const API = '/resource/ApiCResource/create/';
 const DOWNLOAD_TIMEOUT_MS = 15 * 60_000;
-
-// B3: tìm videoUrl ở mọi tầng (thường là options.events[].event_data.videoUrl), id lấy từ object_id_str/object_id gần nhất.
-// event_data đôi khi là chuỗi JSON → parse luôn.
-export function extractVideos(json) {
-    const out = [];
-    const walk = (node, id) => {
-        if (typeof node === 'string' && /^\s*[[{]/.test(node)) {
-            try { node = JSON.parse(node); } catch { return; }
-        }
-        if (!node || typeof node !== 'object') return;
-        id = node.object_id_str ?? node.object_id ?? id;
-        if (typeof node.videoUrl === 'string' && id) out.push({id: String(id), url: node.videoUrl});
-        for (const v of Object.values(node)) walk(v, id);
-    };
-    walk(json);
-    return out;
-}
 
 // File id đã crawl (cả video lỗi) — mỗi dòng 1 id, chỉ append
 export class IdStore {
@@ -79,7 +63,7 @@ export function pickSlot(slots, now, after = 0, rand = Math.random) {
             const end = day.getTime() + s.end * 60_000;
             if (start <= after || end < now) continue;
             const from = Math.max(start, now);
-            return {start, at: from + Math.floor(rand() * (end - from))};
+            return {start, end, at: from + Math.floor(rand() * (end - from))};
         }
     }
     return null;
@@ -129,6 +113,7 @@ export class Pipeline {
     lastSlot = 0;
     lastPostAt = 0;
     slotOpen = false; // đã tới giờ của khung hiện tại, đang crawl/đăng
+    humanSlot = null; // phiên lướt TikTok/FB kế tiếp: {start, end, at}
 
     constructor(cfg, env) {
         this.cfg = cfg;
@@ -138,6 +123,12 @@ export class Pipeline {
         const perDay = Math.floor(Number(cfg.postsPerDay) || 0);
         if (this.slots.length && perDay > 0) this.slots = splitSlots(this.slots, perDay);
         if (cfg.scheduleEnabled && !this.slots.length) throw new Error('Đã bật lịch đăng nhưng chưa nhập khung giờ');
+        // Lịch lướt: chia khung như lịch đăng, mỗi khung 1 phiên vào phút ngẫu nhiên
+        this.humanSlots = cfg.humanEnabled ? parseSchedule(cfg.humanTimes) : [];
+        const humanPerDay = Math.floor(Number(cfg.humanPerDay) || 0);
+        if (this.humanSlots.length && humanPerDay > 0) this.humanSlots = splitSlots(this.humanSlots, humanPerDay);
+        if (cfg.humanEnabled && !this.humanSlots.length) throw new Error('Đã bật human action nhưng chưa nhập khung giờ lướt');
+        this.humanMinutes = cfg.humanEnabled ? parseMinutes(cfg.humanMinutes) : null;
     }
 
     async start() {
@@ -148,6 +139,10 @@ export class Pipeline {
         log('RUN', `▶️ Bắt đầu | đã có ${this.ids.size} id trong lịch sử`);
         const hhmm = m => `${String(Math.floor(m / 60) % 24).padStart(2, '0')}:${String(m % 60).padStart(2, '0')}`;
         if (this.slots.length) log('RUN', `🗓️ Lịch đăng: ${this.slots.map(s => `${hhmm(s.start)}-${hhmm(s.end)}`).join(', ')} (random phút trong mỗi khung)`);
+        if (this.humanSlots.length) {
+            log('RUN', `🧍 Lịch lướt: ${this.humanSlots.map(s => `${hhmm(s.start)}-${hhmm(s.end)}`).join(', ')} (${this.humanMinutes.join('–')} phút/phiên)`);
+            this.#planHuman();
+        }
         try {
             this.ctx = await openChrome(this.cfg);
             this.ctx.on('close', () => {
@@ -178,7 +173,7 @@ export class Pipeline {
     async #loop() {
         // Nhiều URL: tách theo xuống dòng / dấu cách / , ; — bỏ trùng và dòng không phải URL
         const urls = [...new Set(this.cfg.searchUrls.split(/[\s,;]+/).filter(s => /^https?:\/\//.test(s)))];
-        if (!urls.length) throw new Error('Chưa cấu hình danh sách URL Pinterest');
+        if (!urls.length) throw new Error('Chưa cấu hình danh sách URL nguồn crawl');
 
         while (this.running) {
             let posted = 0;
@@ -198,7 +193,7 @@ export class Pipeline {
                     if (!this.running) break;
                     setStep(1, 'error', err.message);
                     logError('B1', `${url}: ${err.message}`);
-                    await this.#notify(`❌ B1 lỗi truy cập Pinterest\n${url}\n${err.message}`);
+                    await this.#notify(`❌ B1 lỗi crawl\n${url}\n${err.message}`);
                 }
             }
             if (this.running && !posted) {
@@ -208,72 +203,26 @@ export class Pipeline {
         }
     }
 
+    // B1–B3 do crawler theo nguồn của URL đảm nhận; mỗi video mới → B4 tải/xử lý → B5–B7 đăng
     async #crawlUrl(url) {
-        setStep(1, 'running', url);
-        const page = await this.ctx.newPage();
-        const queue = [];
-        const seen = new Set();
-
-        // B2: bắt request ApiCResource/create ở cấp context (cả sendBeacon / service worker, không cần chờ response)
-        // Chỉ bắt khi đang cuộn — lúc tải/đăng/chờ thì bỏ qua (Pinterest vẫn bắn beacon ngầm)
-        let apiHits = 0, listening = true;
-        const onRequest = req => {
-            if (!listening || !req.url().includes(API)) return;
-            apiHits++;
-            const body = req.postData() ?? '';
-            const found = extractVideos(new URLSearchParams(body).get('data') ?? body);
-            for (const v of found) {
-                if (seen.has(v.id)) continue;
-                seen.add(v.id);
-                if (this.ids.has(v.id)) continue;
-                queue.push(v);
-                this.stats.found++;
-                log('B3', `🎬 Video mới ${v.id}`);
-            }
-        };
-        this.ctx.on('request', onRequest);
-
-        try {
-            log('B1', `🌐 ${url}`);
-            await page.goto(url, {waitUntil: 'domcontentloaded', timeout: 60_000});
-            setStep(1, 'ok', url);
-            setStep(2, 'running', 'đang cuộn & bắt API ApiCResource/create');
-
-            const max = this.slots.length ? 1 : Math.max(1, Number(this.cfg.videosPerUrl) || 1); // mỗi khung 1 video
-            const maxScrolls = Math.max(1, Number(this.cfg.maxScrolls) || 20);
-            let posted = 0, emptyScrolls = 0;
-
-            while (this.running && posted < max) {
-                const v = queue.shift();
-                listening = !v;
-                if (!v) {
-                    if (emptyScrolls++ >= maxScrolls) {
-                        logWarn('B2', `Cuộn ${maxScrolls} lần không thấy video mới (bắt được ${apiHits} request ApiCResource, ${seen.size} video) — sang URL khác`);
-                        break;
-                    }
-                    await page.bringToFront().catch(() => {});
-                    await page.mouse.wheel(0, 1200 + Math.random() * 1000);
-                    await new Promise(r => setTimeout(r, 3000));
-                    continue;
-                }
-                emptyScrolls = 0;
-                setStep(3, 'ok', `video ${v.id} (còn ${queue.length} trong hàng chờ)`);
-                this.ids.add(v.id); // lưu ngay, kể cả khi tải/đăng lỗi
-                this.#emitStats();
-
-                const file = await this.#transform(await this.#download(v), v);
-                if (!file) continue; // tải/xử lý lỗi → quay lại B3 lấy video khác
-                if (await this.#upload(file, v)) {
-                    posted++;
-                    if (this.running && !this.slots.length) await this.#wait(); // có lịch thì khung giờ quyết định
-                    setStep(2, 'running', 'đang cuộn & bắt API ApiCResource/create');
-                }
-            }
-            return posted;
-        } finally {
-            this.ctx.off('request', onRequest);
-            await page.close().catch(() => {});
+        const max = this.slots.length ? 1 : Math.max(1, Number(this.cfg.videosPerUrl) || 1); // mỗi khung 1 video
+        const videos = crawlerFor(url).crawl(this.ctx, url, {
+            isRunning: () => this.running,
+            isKnown: id => this.ids.has(id),
+            maxScrolls: Math.max(1, Number(this.cfg.maxScrolls) || 20),
+        });
+        let posted = 0;
+        for await (const v of videos) {
+            this.stats.found++;
+            this.ids.add(v.id); // lưu ngay, kể cả khi tải/đăng lỗi
+            this.#emitStats();
+            const file = await this.#transform(await this.#download(v), v);
+            if (!file || !await this.#upload(file, v)) continue; // lỗi → lấy video khác
+            posted++;
+            if (this.running && !this.slots.length) await this.#wait(); // có lịch thì khung giờ quyết định
+            if (posted >= max) break;
         }
+        return posted;
     }
 
     // B4: gọi downloader.py (yt-dlp + ffmpeg)
@@ -368,7 +317,7 @@ Lỗi: ${err.message}`);
         }
         setStep(step, 'ok', `video ${v.id}`);
         await this.#notify(`✅ Đăng ${name} thành công
-ID Pinterest: ${v.id}`);
+ID video: ${v.id}`);
         return true;
     }
 
@@ -396,9 +345,30 @@ ID Pinterest: ${v.id}`);
 
     async #waitUntil(end, label) {
         while (this.running && Date.now() < end) {
+            if (this.humanSlot && Date.now() >= this.humanSlot.at) await this.#human(end);
             setStep(0, 'wait', `${label} (còn ${Math.ceil((end - Date.now()) / 60_000)} phút)`);
             await new Promise(r => setTimeout(r, 1000));
         }
+    }
+
+    #planHuman() {
+        this.humanSlot = pickSlot(this.humanSlots, Date.now(), this.humanSlot?.start);
+        log('HUMAN', `🧍 Hẹn lướt lúc ${fmtTime(this.humanSlot.at)}`);
+    }
+
+    // Lướt TikTok/Facebook trong lúc chờ. Tới giờ mà đang crawl/đăng → lướt ở lần chờ sau; hết khung thì bỏ, sang khung kế
+    async #human(end) {
+        if (Date.now() > this.humanSlot.end) {
+            logWarn('HUMAN', 'Hết khung lướt mà chưa có lúc rảnh — bỏ phiên này');
+            return this.#planHuman();
+        }
+        const until = pickHumanSession(Date.now(), end, this.humanMinutes);
+        if (!until) return; // lần chờ này quá ngắn
+        const sites = [this.cfg.tiktokEnabled && 'tiktok', this.cfg.fbEnabled && 'facebook'].filter(Boolean);
+        const site = sites[Math.floor(Math.random() * sites.length)] ?? 'tiktok';
+        setStep(0, 'wait', `🧍 lướt ${site} tới ${fmtTime(until)}`);
+        await humanSession(this.ctx, site, until, () => this.running, Number(this.cfg.humanLikeRate) || 0);
+        if (this.running) this.#planHuman();
     }
 
     #emitStats() {
