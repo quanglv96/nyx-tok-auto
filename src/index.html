@@ -68,6 +68,10 @@
         .plan .skip { color: var(--muted); text-decoration: line-through; }
         label.check { color: var(--text); display: flex; align-items: center; gap: 6px; margin: 6px 0; }
         label.check input { width: auto; }
+        .hour-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(108px, 1fr)); gap: 6px; margin: 6px 0; }
+        .hour-grid label.check { margin: 0; padding: 4px 8px; border: 1px solid var(--line); border-radius: 6px; color: var(--muted); cursor: pointer; }
+        .hour-grid label.check:has(:checked) { background: rgba(254,44,85,.18); border-color: var(--accent); color: var(--text); font-weight: 600; }
+        .hour-picked { margin: 4px 0; } .hour-picked b { color: var(--accent); }
         .tabs { display: flex; flex-wrap: wrap; gap: 6px; padding: 12px 0 2px; }
         .tabs button.active { background: var(--accent); font-weight: 600; }
         .view { flex: 1; display: flex; flex-direction: column; min-height: 0; }
@@ -176,11 +180,10 @@
 
             <div class="panel" id="cfgSchedule" hidden>
                 <label class="check"><input type="checkbox" id="scheduleEnabled"> Chỉ đăng trong các khung giờ</label>
-                <input id="scheduleTimes" placeholder="08:00-09:00, 12:00-13:00, 20:00-21:30">
-                <label>Số video / ngày (0 = dùng đúng các khung trên)</label>
-                <input id="postsPerDay" type="number" min="0">
-                <div class="hint">Nhập &gt; 0 thì app lấy khoảng từ giờ đầu tới giờ cuối ở trên (vd "05:00-23:00") rồi tự chia thành n khung đều nhau.</div>
-                <div class="hint">Mỗi khung đăng 1 video vào một phút ngẫu nhiên trong khung; ghi "20:00" là đăng đúng giờ đó. Tới phút đó mới crawl + tải + đăng. Bật lịch thì "Chờ giữa 2 video" là khoảng cách tối thiểu.</div>
+                <input id="scheduleTimes" type="hidden">
+                <div id="hourGrid" class="hour-grid"></div>
+                <div class="hour-picked" id="hourCount"></div>
+                <div class="hint">Số giờ đã chọn = <b>số video / ngày</b>. Mỗi khung đăng 1 video vào một phút ngẫu nhiên trong giờ đó; tới phút đó mới crawl + tải + đăng. Bật lịch thì "Chờ giữa 2 video" là khoảng cách tối thiểu.</div>
             </div>
 
             <div class="panel" id="cfgTransform" hidden>
@@ -202,12 +205,13 @@
                 <label>Tỷ lệ like (%)</label>
                 <input id="humanLikeRate" type="number" min="0" max="100">
                 <label>Khung giờ lướt</label>
-                <input id="humanTimes" placeholder="07:00-11:00, 13:00-17:00, 19:00-23:00">
-                <label>Số phiên / ngày (0 = mỗi khung trên 1 phiên)</label>
-                <input id="humanPerDay" type="number" min="0">
+                <input id="humanTimes" type="hidden">
+                <div id="humanHourGrid" class="hour-grid"></div>
+                <div class="hour-picked" id="humanHourCount"></div>
+                <div class="hint">Số giờ đã chọn = <b>số phiên / ngày</b>.</div>
                 <label>Thời lượng mỗi phiên (phút, vd 3-12)</label>
                 <input id="humanMinutes" placeholder="3-12">
-                <div class="hint">Giống lịch đăng: số phiên &gt; 0 thì chia khoảng từ giờ đầu tới giờ cuối thành n khung đều, mỗi khung lướt 1 phiên vào phút ngẫu nhiên. Chỉ lướt lúc đang chờ và luôn xong trước giờ crawl/đăng 2 phút; tới giờ mà đang đăng thì lướt ở lần chờ sau, hết khung thì bỏ. Mỗi phiên chọn ngẫu nhiên TikTok hoặc Facebook trong các ô đã tick ở trên. Tối đa 3 like / phiên.</div>
+                <div class="hint">Giống lịch đăng: mỗi khung đã tick lướt 1 phiên vào phút ngẫu nhiên trong giờ đó. Chỉ lướt lúc đang chờ và luôn xong trước giờ crawl/đăng 2 phút; tới giờ mà đang đăng thì lướt ở lần chờ sau, hết khung thì bỏ. Mỗi phiên chọn ngẫu nhiên TikTok hoặc Facebook trong các ô đã tick ở trên. Tối đa 3 like / phiên.</div>
             </div>
 
             <div class="panel" id="cfgChrome" hidden>

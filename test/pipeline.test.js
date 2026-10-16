@@ -3,7 +3,7 @@ import assert from 'node:assert/strict';
 import fs from 'fs';
 import os from 'os';
 import path from 'path';
-import {IdStore, parseSchedule, pickSlot, planDay, shuffle, splitSlots} from '../src/pipeline.js';
+import {IdStore, parseSchedule, pickSlot, planDay, shuffle} from '../src/pipeline.js';
 import {extractVideos} from '../src/crawlers/pinterest.js';
 import {crawlerFor} from '../src/crawlers/index.js';
 import {pickHumanSession, parseMinutes} from '../src/human.js';
@@ -80,10 +80,7 @@ test('planDay lên lịch hết ngày, tăng dần, bỏ khung đã dùng', () =
     assert.deepEqual(planDay(slots, at(21, 30), at(20, 0), () => 0).map(s => s.start), [at(8, 0, 15), at(20, 0, 15)]);
 });
 
-test('splitSlots chia 05:00-23:00 thành n khung đều', () => {
-    assert.deepEqual(splitSlots(parseSchedule('05:00-23:00'), 3),
-        [{start: 300, end: 660}, {start: 660, end: 1020}, {start: 1020, end: 1380}]);
-});
+
 
 test('version: newer + sameShell', async () => {
     const {newer, sameShell} = await import('../src/version.js');

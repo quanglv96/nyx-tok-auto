@@ -2,7 +2,7 @@ const {ipcRenderer} = require('electron');
 
 const $ = id => document.getElementById(id);
 const FIELDS = ['dataDir', 'searchUrls', 'caption', 'tiktokEnabled', 'fbEnabled', 'fbHashtags', 'videosPerUrl', 'delayMinutes', 'maxScrolls',
-    'chromePath', 'chromeProfileDir', 'telegramToken', 'telegramAdmin', 'scheduleEnabled', 'scheduleTimes', 'postsPerDay', 'humanEnabled', 'humanTiktok', 'humanFacebook', 'humanLikeRate', 'humanTimes', 'humanPerDay', 'humanMinutes', 'autoStart', 'autoRun',
+    'chromePath', 'chromeProfileDir', 'telegramToken', 'telegramAdmin', 'scheduleEnabled', 'scheduleTimes', 'humanEnabled', 'humanTiktok', 'humanFacebook', 'humanLikeRate', 'humanTimes','humanMinutes', 'autoStart', 'autoRun',
     'tfRandom', 'tfRotate', 'tfColor', 'tfFps', 'tfAudio', 'tfPip', 'reactionPath'];
 const STEPS = ['B1 Truy cập nguồn', 'B2 Quét video', 'B3 Lọc video mới', 'B4 Tải video', 'B5 Đăng TikTok', 'B6 Đăng Facebook', 'B7 Thông báo & xoá'];
 const MAX_LOG_LINES = 1500;
@@ -46,7 +46,8 @@ async function loadConfig() {
     const cfg = await ipcRenderer.invoke('get-config');
     FIELDS.forEach(f => $(f).type === 'checkbox' ? $(f).checked = !!cfg[f] : $(f).value = cfg[f] ?? '');
     syncPlatforms();
-    urls = parseUrls(cfg.searchUrls ?? '');
+    HOUR_GRIDS.forEach(g => g.load(cfg[g.field] ?? ''));
+    urls =parseUrls(cfg.searchUrls ?? '');
     renderUrls();
     $('version').textContent = `v${cfg.version}`;
     $('st-total').textContent = cfg.total;
@@ -145,6 +146,36 @@ function syncPlatforms() {
     $('fbHashtags').disabled = !$('fbEnabled').checked;
 }
 for (const id of ['tiktokEnabled', 'fbEnabled']) $(id).onchange = () => { syncPlatforms(); call('save-config', readForm()); };
+
+// Khung giờ đăng / lướt: 24 ô tick theo giờ, lưu vào field dạng "05:00-06:00, 12:00-13:00" (mỗi ô 1 video / 1 phiên)
+const pad = h => `${String(h % 24).padStart(2, '0')}:00`;
+function hourGrid(gridId, field, countId) {
+    const boxes = Array.from({length: 24}, (_, h) => Object.assign(document.createElement('input'), {type: 'checkbox', value: h}));
+    const sync = () => {
+        const on = boxes.filter(b => b.checked).map(b => `${pad(+b.value)}-${pad(+b.value + 1)}`);
+        $(field).value = on.join(', ');
+        $(countId).replaceChildren('Đã chọn ', Object.assign(document.createElement('b'), {textContent: `${on.length} giờ`}),
+            on.length ? `: ${on.join(' · ')}` : ' — chưa tick giờ nào');
+    };
+    $(gridId).replaceChildren(...boxes.map(box => {
+        box.onchange = () => { sync(); call('save-config', readForm()); };
+        const label = Object.assign(document.createElement('label'), {className: 'check'});
+        label.append(box, `${pad(+box.value)}-${pad(+box.value + 1)}`);
+        return label;
+    }));
+    // Cấu hình cũ dạng tự gõ ("07:30-09:00") → tick các giờ nằm trong khung
+    const load = text => {
+        const ranges = text.split(/[,;\n]/).map(s => s.trim().split('-').map(t => {
+            const [h, m] = t.split(':').map(Number);
+            return h * 60 + (m || 0);
+        })).filter(r => r.every(Number.isFinite)).map(([a, b = a]) => [a, b < a ? b + 1440 : b]);
+        const hit = x => ranges.some(([a, b]) => a === b ? Math.floor(a / 60) * 60 === x : a <= x && x < b);
+        boxes.forEach(box => box.checked = hit(box.value * 60) || hit(box.value * 60 + 1440));
+        sync();
+    };
+    return {field, load};
+}
+const HOUR_GRIDS = [hourGrid('hourGrid', 'scheduleTimes', 'hourCount'), hourGrid('humanHourGrid', 'humanTimes', 'humanHourCount')];
 
 $('btnSave').onclick =() => call('save-config', readForm());
 $('btnStart').onclick = async () => {

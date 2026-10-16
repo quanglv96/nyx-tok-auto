@@ -45,13 +45,6 @@ export function parseSchedule(text) {
     }).sort((x, y) => x.start - y.start);
 }
 
-// Chia khoảng [start, end] thành n khung bằng nhau, mỗi khung đăng 1 video — "05:00-23:00", n=6 → mỗi khung 3h
-export function splitSlots(slots, n) {
-    const start = slots[0].start, end = Math.max(...slots.map(s => s.end));
-    const step = (end - start) / n;
-    return Array.from({length: n}, (_, i) => ({start: Math.round(start + i * step), end: Math.round(start + (i + 1) * step)}));
-}
-
 // Khung gần nhất chưa dùng (bắt đầu sau `after`) và chưa kết thúc → giờ đăng random trong khung
 export function pickSlot(slots, now, after = 0, rand = Math.random) {
     const midnight = new Date(now);
@@ -132,15 +125,11 @@ export class Pipeline {
         this.cfg = cfg;
         this.env = env;
         this.delayMs = Math.max(0, Number(cfg.delayMinutes) || 0) * 60_000;
-        this.slots = cfg.scheduleEnabled ? parseSchedule(cfg.scheduleTimes) : [];
-        const perDay = Math.floor(Number(cfg.postsPerDay) || 0);
-        if (this.slots.length && perDay > 0) this.slots = splitSlots(this.slots, perDay);
-        if (cfg.scheduleEnabled && !this.slots.length) throw new Error('Đã bật lịch đăng nhưng chưa nhập khung giờ');
-        // Lịch lướt: chia khung như lịch đăng, mỗi khung 1 phiên vào phút ngẫu nhiên
+        this.slots = cfg.scheduleEnabled ? parseSchedule(cfg.scheduleTimes) : []; // mỗi khung đã tick = 1 video
+        if (cfg.scheduleEnabled && !this.slots.length) throw new Error('Đã bật lịch đăng nhưng chưa tick khung giờ nào');
+        // Lịch lướt: như lịch đăng, mỗi khung đã tick 1 phiên vào phút ngẫu nhiên
         this.humanSlots = cfg.humanEnabled ? parseSchedule(cfg.humanTimes) : [];
-        const humanPerDay = Math.floor(Number(cfg.humanPerDay) || 0);
-        if (this.humanSlots.length && humanPerDay > 0) this.humanSlots = splitSlots(this.humanSlots, humanPerDay);
-        if (cfg.humanEnabled && !this.humanSlots.length) throw new Error('Đã bật human action nhưng chưa nhập khung giờ lướt');
+        if (cfg.humanEnabled && !this.humanSlots.length) throw new Error('Đã bật human action nhưng chưa tick khung giờ lướt nào');
         this.humanMinutes = cfg.humanEnabled ? parseMinutes(cfg.humanMinutes) : null;
         this.humanSites = [cfg.humanTiktok && 'tiktok', cfg.humanFacebook && 'facebook'].filter(Boolean);
         if (cfg.humanEnabled && !this.humanSites.length) throw new Error('Đã bật human action nhưng chưa tích Lướt TikTok / Lướt Facebook');

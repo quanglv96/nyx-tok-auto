@@ -22,14 +22,12 @@ const defaults = () => ({
     autoStart: true,       // khởi động cùng Windows
     autoRun: false,        // mở app là tự bấm Bắt đầu
     scheduleEnabled: true,
-    scheduleTimes: '05:00-06:00, 12:00-13:00, 20:00-21:00',
-    postsPerDay: 3,        // >0: chia khoảng giờ trên thành n khung đều nhau
+    scheduleTimes: '05:00-06:00, 12:00-13:00, 20:00-21:00', // tick theo giờ trên UI, mỗi khung 1 video
     humanEnabled: true,    // lúc chờ thỉnh thoảng lướt TikTok/Facebook như người thật (src/human.js)
     humanTiktok: true,     // được lướt TikTok (độc lập với tích chọn đăng)
     humanFacebook: true,   // được lướt Facebook
     humanLikeRate: 10,     // % video/post được like, tối đa 3 like / phiên
-    humanTimes: '07:00-11:00, 13:00-17:00, 19:00-23:00', // khung giờ được lướt
-    humanPerDay: 4,        // >0: chia khoảng giờ trên thành n khung, mỗi khung 1 phiên
+    humanTimes: '08:00-09:00, 11:00-12:00, 15:00-16:00, 21:00-22:00', // tick theo giờ trên UI, mỗi khung 1 phiên
     humanMinutes: '3-12',  // thời lượng mỗi phiên (phút)
     // Xử lý video bằng ffmpeg — các tuỳ chọn kết hợp tự do (xem src/transform.js)
     tfRandom: true,        // mỗi video random ≥1 hiệu ứng trong các ô đã tick (không tick = tất cả)
