@@ -14,18 +14,25 @@ import {transformVideo, tfEnabled, tfTag, randomOpts} from './transform.js';
 const DOWNLOAD_TIMEOUT_MS = 15 * 60_000;
 const DAY_MS = 86_400_000;
 
-// File id đã crawl (cả video lỗi) — mỗi dòng 1 id, chỉ append
+// File id đã crawl (cả video lỗi) — mỗi dòng "category<TAB>id" (category = nguồn: Pinterest / Xiaohongshu), chỉ append.
+// Migration: bản cũ chỉ crawl Pinterest, mỗi dòng chỉ có id → ghi lại thành "Pinterest<TAB>id" (1 lần, lúc mở file).
 export class IdStore {
     constructor(file) {
         this.file = file;
         fs.mkdirSync(path.dirname(file), {recursive: true});
-        this.ids = new Set(fs.existsSync(file) ? fs.readFileSync(file, 'utf8').split(/\r?\n/).filter(Boolean) : []);
+        let lines = fs.existsSync(file) ? fs.readFileSync(file, 'utf8').split(/\r?\n/).filter(Boolean) : [];
+        if (lines.some(l => !l.includes('\t'))) {
+            lines = lines.map(l => l.includes('\t') ? l : `Pinterest\t${l}`);
+            fs.writeFileSync(`${file}.tmp`, lines.map(l => `${l}\n`).join(''));
+            fs.renameSync(`${file}.tmp`, file); // ghi file tạm rồi đổi tên → tắt giữa chừng không mất dữ liệu
+        }
+        this.ids = new Set(lines.map(l => l.split('\t').pop()));
     }
     has(id) { return this.ids.has(id); }
-    add(id) {
+    add(id, category = '') {
         if (this.ids.has(id)) return;
         this.ids.add(id);
-        fs.appendFileSync(this.file, `${id}\n`);
+        fs.appendFileSync(this.file, `${category}\t${id}\n`);
     }
     get size() { return this.ids.size; }
 }
@@ -178,8 +185,12 @@ export class Pipeline {
 
     async #loop() {
         // Nhiều URL: tách theo xuống dòng / dấu cách / , ; — bỏ trùng và dòng không phải URL
-        const urls = [...new Set(this.cfg.searchUrls.split(/[\s,;]+/).filter(s => /^https?:\/\//.test(s)))];
-        if (!urls.length) throw new Error('Chưa cấu hình danh sách URL nguồn crawl');
+        const list = text => (text ?? '').split(/[\s,;]+/).filter(s => /^https?:\/\//.test(s));
+        const urls = [...new Set([
+            ...(this.cfg.pinterestEnabled ? list(this.cfg.searchUrls) : []),
+            ...(this.cfg.xhsEnabled ? list(this.cfg.xhsUrls) : []),
+        ])];
+        if (!urls.length) throw new Error('Chưa bật nguồn crawl nào (Pinterest / Xiaohongshu) hoặc danh sách URL trống');
 
         while (this.running) {
             let posted = 0;
@@ -215,7 +226,8 @@ export class Pipeline {
     // B1–B3 do crawler theo nguồn của URL đảm nhận; mỗi video mới → B4 tải/xử lý → B5–B7 đăng
     async #crawlUrl(url) {
         const max = this.slots.length ? 1 : Math.max(1, Number(this.cfg.videosPerUrl) || 1); // mỗi khung 1 video
-        const videos = crawlerFor(url).crawl(this.ctx, url, {
+        const crawler = crawlerFor(url);
+        const videos = crawler.crawl(this.ctx, url, {
             isRunning: () => this.running,
             isKnown: id => this.ids.has(id),
             maxScrolls: Math.max(1, Number(this.cfg.maxScrolls) || 20),
@@ -223,7 +235,7 @@ export class Pipeline {
         let posted = 0;
         for await (const v of videos) {
             this.stats.found++;
-            this.ids.add(v.id); // lưu ngay, kể cả khi tải/đăng lỗi
+            this.ids.add(v.id, crawler.name); // lưu ngay, kể cả khi tải/đăng lỗi
             this.#emitStats();
             const file = await this.#transform(await this.#download(v), v);
             if (!file || !await this.#upload(file, v)) continue; // lỗi → lấy video khác

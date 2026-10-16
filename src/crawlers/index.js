@@ -1,8 +1,9 @@
 // Chọn crawler theo URL. Thêm nguồn mới (vd Xiaohongshu): tạo file cùng dạng pinterest.js
 // (export name, match(url), async* crawl(ctx, url, opts) → {id, url}) rồi thêm vào CRAWLERS.
 import * as pinterest from './pinterest.js';
+import * as xiaohongshu from './xiaohongshu.js';
 
-const CRAWLERS = [pinterest];
+const CRAWLERS = [pinterest, xiaohongshu];
 
 export function crawlerFor(url) {
     const c = CRAWLERS.find(c => c.match(url));

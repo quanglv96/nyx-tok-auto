@@ -168,8 +168,9 @@ ipcMain.handle('open-chrome', async () => {
     const ctx = await toolChrome();
     const pinterest = ctx.pages()[0] ?? await ctx.newPage();
     await pinterest.goto('https://www.pinterest.com/login/');
+    await (await ctx.newPage()).goto('https://www.rednote.com/explore');
     await (await ctx.newPage()).goto('https://www.tiktok.com/tiktokstudio/upload');
-    log('CHROME', 'Đã mở Chrome profile — đăng nhập Pinterest + TikTok + Facebook rồi đóng cửa sổ Chrome');
+    log('CHROME', 'Đã mở Chrome profile — đăng nhập Pinterest + Xiaohongshu + TikTok + Facebook rồi đóng cửa sổ Chrome');
 });
 
 // ---------- Test tính năng: chạy riêng từng bước trên Chrome đăng nhập, cfg lấy từ form (chưa cần Lưu) ----------

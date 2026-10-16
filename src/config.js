@@ -9,7 +9,10 @@ const envKey = k => k.replace(/[A-Z]/g, '_$&').toUpperCase(); // videosPerUrl �
 
 const defaults = () => ({
     dataDir: path.join(app.getPath('documents'), 'NTT Auto'),
-    searchUrls: 'https://www.pinterest.com/search/videos/?q=mèo+cute&rs=content_type_filter&filter_location=1\nhttps://www.pinterest.com/search/pins/?q=m%C3%A8o+h%C3%A0i%20h%C6%B0%E1%BB%9Bc&rs=typed',
+    pinterestEnabled: true,
+    searchUrls: 'https://www.pinterest.com/search/videos/?q=mèo+cute&rs=content_type_filter&filter_location=1\nhttps://www.pinterest.com/search/pins/?q=m%C3%A8o+h%C3%A0i%20h%C6%B0%E1%BB%9Bc&rs=typed', // URL Pinterest (giữ tên cũ để không mất cấu hình)
+    xhsEnabled: true,
+    xhsUrls: '',           // URL Xiaohongshu / RedNote, mỗi dòng 1 URL
     chromePath: '',        // trống = tự tìm chrome.exe
     chromeProfileDir: '',  // trống = <dataDir>/chrome-profile
     caption: '#meo #cute #fyp',

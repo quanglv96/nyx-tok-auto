@@ -6,6 +6,7 @@ import path from 'path';
 import {IdStore, parseSchedule, pickSlot, planDay, shuffle} from '../src/pipeline.js';
 import {extractVideos} from '../src/crawlers/pinterest.js';
 import {crawlerFor} from '../src/crawlers/index.js';
+import {extractVideoUrl} from '../src/crawlers/xiaohongshu.js';
 import {pickHumanSession, parseMinutes} from '../src/human.js';
 
 test('extractVideos lấy id + videoUrl, bỏ event không có video', () => {
@@ -24,11 +25,13 @@ test('extractVideos lấy id + videoUrl, bỏ event không có video', () => {
 
 test('IdStore lưu id bền vững, không trùng', () => {
     const file = path.join(fs.mkdtempSync(path.join(os.tmpdir(), 'ntt-')), 'ids.txt');
+    fs.writeFileSync(file, 'old\n'); // dòng cũ chỉ có id
     const a = new IdStore(file);
-    a.add('1'); a.add('1'); a.add('2');
+    a.add('1', 'Pinterest'); a.add('1', 'Pinterest'); a.add('2', 'Xiaohongshu');
     const b = new IdStore(file);
-    assert.ok(b.has('1') && b.has('2'));
-    assert.equal(b.size, 2);
+    assert.ok(b.has('old') && b.has('1') && b.has('2'));
+    assert.equal(b.size, 3);
+    assert.equal(fs.readFileSync(file, 'utf8'), 'Pinterest\told\nPinterest\t1\nXiaohongshu\t2\n'); // dòng cũ được migrate
 });
 
 test('parseSchedule đọc khung giờ, giờ đơn, khung qua nửa đêm, báo lỗi sai định dạng', () => {
@@ -166,5 +169,13 @@ test('parseMinutes đọc "3-12" / "5", báo lỗi khi sai', () => {
 test('crawlerFor chọn crawler theo host, nguồn lạ thì báo lỗi', () => {
     assert.equal(crawlerFor('https://www.pinterest.com/search/videos/?q=a').name, 'Pinterest');
     assert.equal(crawlerFor('https://vn.pinterest.com/pin/1/').name, 'Pinterest');
-    assert.throws(() => crawlerFor('https://www.xiaohongshu.com/explore'), /Chưa hỗ trợ/);
+    assert.equal(crawlerFor('https://www.rednote.com/search_result?keyword=a').name, 'Xiaohongshu');
+    assert.equal(crawlerFor('https://www.xiaohongshu.com/explore').name, 'Xiaohongshu');
+    assert.throws(() => crawlerFor('https://www.youtube.com/watch?v=1'), /Chưa hỗ trợ/);
+});
+
+test('extractVideoUrl lấy data.items[0].note_card.video.media.stream.h264[0].master_url', () => {
+    assert.equal(extractVideoUrl({data: {items: [{note_card: {video: {media: {stream: {h265: [{master_url: 'https://x/h5.mp4'}], h264: [{master_url: 'https://x/v.mp4'}]}}}}}]}}), 'https://x/v.mp4');
+    assert.equal(extractVideoUrl({data: {items: [{note_card: {video: {media: {stream: {h264: [{master_url: 'https://x/h.mp4'}]}}}}}]}}), 'https://x/h.mp4');
+    assert.equal(extractVideoUrl({data: {items: []}}), null);
 });

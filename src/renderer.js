@@ -1,7 +1,7 @@
 const {ipcRenderer} = require('electron');
 
 const $ = id => document.getElementById(id);
-const FIELDS = ['dataDir', 'searchUrls', 'caption', 'tiktokEnabled', 'fbEnabled', 'fbHashtags', 'videosPerUrl', 'delayMinutes', 'maxScrolls',
+const FIELDS = ['dataDir', 'searchUrls', 'xhsUrls', 'pinterestEnabled', 'xhsEnabled', 'caption', 'tiktokEnabled', 'fbEnabled', 'fbHashtags', 'videosPerUrl', 'delayMinutes', 'maxScrolls',
     'chromePath', 'chromeProfileDir', 'telegramToken', 'telegramAdmin', 'scheduleEnabled', 'scheduleTimes', 'humanEnabled', 'humanTiktok', 'humanFacebook', 'humanLikeRate', 'humanTimes','humanMinutes', 'autoStart', 'autoRun',
     'tfRandom', 'tfRotate', 'tfColor', 'tfFps', 'tfAudio', 'tfPip', 'reactionPath'];
 const STEPS = ['B1 Truy cập nguồn', 'B2 Quét video', 'B3 Lọc video mới', 'B4 Tải video', 'B5 Đăng TikTok', 'B6 Đăng Facebook', 'B7 Thông báo & xoá'];
@@ -47,8 +47,7 @@ async function loadConfig() {
     FIELDS.forEach(f => $(f).type === 'checkbox' ? $(f).checked = !!cfg[f] : $(f).value = cfg[f] ?? '');
     syncPlatforms();
     HOUR_GRIDS.forEach(g => g.load(cfg[g.field] ?? ''));
-    urls =parseUrls(cfg.searchUrls ?? '');
-    renderUrls();
+    URL_LISTS.forEach(l => l.load(cfg[l.field] ?? ''));
     $('version').textContent = `v${cfg.version}`;
     $('st-total').textContent = cfg.total;
 }
@@ -78,67 +77,79 @@ document.querySelectorAll('[data-pick-file]').forEach(btn => btn.onclick = async
     if (file) $(btn.dataset.pickFile).value = file;
 });
 
-// ---------- Danh sách URL crawl (lưu vào searchUrls dạng mỗi dòng 1 URL) ----------
-let urls = [];
+// ---------- Danh sách URL crawl: mỗi nguồn 1 danh sách riêng (lưu vào field dạng mỗi dòng 1 URL) ----------
 const parseUrls = text => text.split(/[\s,;]+/).filter(s => /^https?:\/\//.test(s)); // cùng cách tách với pipeline
+const hostIs = re => u => { try { return re.test(new URL(u).hostname); } catch { return false; } };
 
 // "mèo hài hước · pins" cho dễ đọc thay vì chuỗi %C3%A8...
 function describe(u) {
     try {
         const url = new URL(u);
-        return [url.searchParams.get('q') || url.pathname, url.pathname.split('/').filter(Boolean).pop() ?? ''];
+        let kw = url.searchParams.get('q') || url.searchParams.get('keyword') || url.pathname;
+        try { kw = decodeURIComponent(kw); } catch {} // keyword Xiaohongshu bị encode 2 lần
+        return [kw, url.pathname.split('/').filter(Boolean).pop() ?? ''];
     } catch { return [u, '']; }
 }
 
-function renderUrls() {
-    $('searchUrls').value = urls.join('\n');
-    $('urlCount').textContent = urls.length;
-    $('urlList').replaceChildren(...urls.map((u, i) => {
-        const item = document.createElement('div');
-        item.className = 'url-item';
-        const [kw, type] = describe(u);
-        const head = document.createElement('div');
-        head.className = 'kw';
-        head.append(Object.assign(document.createElement('b'), {textContent: `${i + 1}. ${kw}`}),
-            Object.assign(document.createElement('small'), {textContent: type}));
-        const input = Object.assign(document.createElement('input'), {value: u, title: u});
-        input.onchange = () => updateUrl(i, input.value.trim());
-        const del = Object.assign(document.createElement('button'), {textContent: '✕', title: 'Xoá', className: 'danger'});
-        del.onclick = () => confirm(`Xoá URL "${kw}"?`) && saveUrls(urls.filter((_, j) => j !== i));
-        const row = document.createElement('div');
-        row.className = 'row';
-        row.append(input, del);
-        item.append(head, row);
-        return item;
-    }));
+// p = tiền tố id trong index.html (<p>List, <p>New, <p>Add, <p>Count, <p>Enabled), field = ô ẩn lưu cấu hình
+function urlList(p, enabledId, field, label, match) {
+    const l = {field, urls: []};
+    const save = next => { l.urls = next; render(); call('save-config', readForm()); };
+
+    function render() {
+        $(field).value = l.urls.join('\n');
+        $(`${p}Count`).textContent = l.urls.length;
+        $(`${p}List`).replaceChildren(...l.urls.map((u, i) => {
+            const item = document.createElement('div');
+            item.className = 'url-item';
+            const [kw, type] = describe(u);
+            const head = document.createElement('div');
+            head.className = 'kw';
+            head.append(Object.assign(document.createElement('b'), {textContent: `${i + 1}. ${kw}`}),
+                Object.assign(document.createElement('small'), {textContent: type}));
+            const input = Object.assign(document.createElement('input'), {value: u, title: u});
+            input.onchange = () => update(i, input.value.trim());
+            const del = Object.assign(document.createElement('button'), {textContent: '✕', title: 'Xoá', className: 'danger'});
+            del.onclick = () => confirm(`Xoá URL "${kw}"?`) && save(l.urls.filter((_, j) => j !== i));
+            const row = document.createElement('div');
+            row.className = 'row';
+            row.append(input, del);
+            item.append(head, row);
+            return item;
+        }));
+    }
+
+    function add() {
+        const found = parseUrls($(`${p}New`).value);
+        if (!found.length) return alert('Không tìm thấy URL hợp lệ (phải bắt đầu bằng http:// hoặc https://)');
+        const wrong = found.filter(u => !match(u));
+        if (wrong.length) return alert(`Không phải URL ${label}:\n${wrong.join('\n')}`);
+        const fresh = [...new Set(found)].filter(u => !l.urls.includes(u));
+        if (fresh.length < found.length) addLog({type: 'warn', msg: `⚠️ Bỏ qua ${found.length - fresh.length} URL trùng`});
+        $(`${p}New`).value = '';
+        if (fresh.length) save([...l.urls, ...fresh]);
+    }
+
+    function update(i, u) {
+        if (!/^https?:\/\/\S+$/.test(u) || !match(u)) alert(`URL ${label} không hợp lệ`);
+        else if (l.urls.some((x, j) => x === u && j !== i)) alert('URL đã có trong danh sách');
+        else return save(l.urls.map((x, j) => j === i ? u : x));
+        render(); // sai → trả lại giá trị cũ
+    }
+
+    $(`${p}Add`).onclick = add;
+    $(`${p}New`).onkeydown = e => { if (e.key === 'Enter') add(); }; // không return false — sẽ chặn mọi phím gõ
+    // Dán URL hợp lệ → thêm luôn, không cần Enter (chờ giá trị dán vào ô xong mới đọc)
+    $(`${p}New`).onpaste = () => setTimeout(() => parseUrls($(`${p}New`).value).length && add());
+    $(enabledId).onchange = () => call('save-config', readForm());
+    l.load = text => { l.urls = parseUrls(text); render(); };
+    return l;
 }
 
-function saveUrls(next) {
-    urls = next;
-    renderUrls();
-    call('save-config', readForm());
-}
-
-function addUrls() {
-    const found = parseUrls($('urlNew').value);
-    const fresh = [...new Set(found)].filter(u => !urls.includes(u));
-    if (!found.length) return alert('Không tìm thấy URL hợp lệ (phải bắt đầu bằng http:// hoặc https://)');
-    if (fresh.length < found.length) addLog({type: 'warn', msg: `⚠️ Bỏ qua ${found.length - fresh.length} URL trùng`});
-    $('urlNew').value = '';
-    if (fresh.length) saveUrls([...urls, ...fresh]);
-}
-
-function updateUrl(i, u) {
-    if (!/^https?:\/\/\S+$/.test(u)) alert('URL không hợp lệ');
-    else if (urls.some((x, j) => x === u && j !== i)) alert('URL đã có trong danh sách');
-    else return saveUrls(urls.map((x, j) => j === i ? u : x));
-    renderUrls(); // sai → trả lại giá trị cũ
-}
-
-$('btnUrlAdd').onclick = addUrls;
-$('urlNew').onkeydown = e => { if (e.key === 'Enter') addUrls(); }; // không return false — sẽ chặn mọi phím gõ
-// Dán URL hợp lệ → thêm luôn, không cần Enter (chờ giá trị dán vào ô xong mới đọc)
-$('urlNew').onpaste = () => setTimeout(() => parseUrls($('urlNew').value).length && addUrls());
+const URL_LISTS = [
+    urlList('pin', 'pinterestEnabled', 'searchUrls', 'Pinterest', hostIs(/(^|\.)pinterest\.|^pin\.it$/i)),
+    urlList('xhs', 'xhsEnabled', 'xhsUrls', 'Xiaohongshu', hostIs(/(^|\.)(rednote|xiaohongshu)\.com$/i)),
+];
 
 // Tích chọn nền tảng đăng: bỏ tích thì khoá ô caption/hashtag tương ứng, lưu ngay
 function syncPlatforms() {
@@ -295,7 +306,7 @@ $('btnTestShow').onclick = () => call('show-file', testResult.output);
 $('btnTestCopy').onclick = () => navigator.clipboard.writeText(testResult.cmd);
 // ---------- Test tính năng: crawl / đăng TikTok / đăng Facebook / human ----------
 const TESTS = {
-    crawl: () => call('test-crawl', $('tCrawlUrl').value.trim() || urls[0] || '', readForm()).then(r => r && ($('tFile').value = r.file)),
+    crawl: () => call('test-crawl', $('tCrawlUrl').value.trim() || URL_LISTS.flatMap(l => l.urls)[0] || '', readForm()).then(r => r && ($('tFile').value = r.file)),
     tiktok: () => confirm('Đăng THẬT video này lên TikTok?') && call('test-tiktok', $('tFile').value.trim(), readForm()),
     facebook: () => confirm('Đăng THẬT video này lên Facebook?') && call('test-facebook', $('tFile').value.trim(), readForm()),
     'human-tiktok': () => call('test-human', 'tiktok', $('tHumanMin').value, readForm()),

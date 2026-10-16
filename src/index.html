@@ -154,11 +154,18 @@
 
             <div class="panel" id="cfgCrawl" hidden>
                 <h3>Pinterest</h3>
-                <label>URL nguồn (<span id="urlCount">0</span>) — mỗi vòng dùng ngẫu nhiên, không lặp</label>
+                <label class="check"><input type="checkbox" id="pinterestEnabled"> Crawl Pinterest</label>
+                <label>URL Pinterest (<span id="pinCount">0</span>) — trang tìm kiếm / board</label>
                 <input id="searchUrls" type="hidden">
-                <div id="urlList"></div>
-                <div class="row"><input id="urlNew" placeholder="Dán URL vào đây — tự thêm (gõ tay thì Enter)"><button id="btnUrlAdd" title="Thêm">＋</button></div>
-                <div class="hint">Sửa trực tiếp trong ô, ✕ để xoá — tự lưu ngay. Hiện hỗ trợ trang tìm kiếm / board Pinterest.</div>
+                <div id="pinList"></div>
+                <div class="row"><input id="pinNew" placeholder="Dán URL Pinterest vào đây — tự thêm (gõ tay thì Enter)"><button id="pinAdd" title="Thêm">＋</button></div>
+                <h3>Xiaohongshu (RedNote)</h3>
+                <label class="check"><input type="checkbox" id="xhsEnabled"> Crawl Xiaohongshu</label>
+                <label>URL Xiaohongshu (<span id="xhsCount">0</span>) — trang tìm kiếm rednote.com / xiaohongshu.com</label>
+                <input id="xhsUrls" type="hidden">
+                <div id="xhsList"></div>
+                <div class="row"><input id="xhsNew" placeholder="Dán URL Xiaohongshu vào đây — tự thêm (gõ tay thì Enter)"><button id="xhsAdd" title="Thêm">＋</button></div>
+                <div class="hint">Sửa trực tiếp trong ô, ✕ để xoá — tự lưu ngay. Mỗi vòng trộn ngẫu nhiên URL của các nguồn đang tick, không lặp. Bỏ tick = giữ URL nhưng không crawl.</div>
                 <div class="grid2">
                     <div><label>Video / URL</label><input id="videosPerUrl" type="number" min="1"></div>
                     <div><label>Cuộn tối đa (không thấy video mới thì sang URL khác)</label><input id="maxScrolls" type="number" min="1"></div>
@@ -246,7 +253,7 @@
                 <div class="hint">Chạy riêng từng bước trên Chrome đăng nhập, dùng cấu hình đang nhập (không cần Lưu). Không chạy được khi đang Bắt đầu.</div>
                 <h3>Crawl video</h3>
                 <div class="row">
-                    <input id="tCrawlUrl" placeholder="URL nguồn (vd trang tìm kiếm Pinterest) — trống = URL đầu trong cấu hình">
+                    <input id="tCrawlUrl" placeholder="URL nguồn Pinterest / Xiaohongshu — trống = URL đầu trong cấu hình">
                     <button class="tbtn" data-test="crawl">▶ Crawl 1 video</button>
                 </div>
                 <div class="hint">Lấy video đầu tiên tìm thấy (không đối chiếu / không ghi id đã crawl), tải về thư mục test và điền vào ô file bên dưới.</div>
