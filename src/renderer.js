@@ -189,7 +189,9 @@ ipcRenderer.on('updater', (_, u) => {
     const text = {available: `Có bản v${u.version}`, downloading: `Đang tải cập nhật ${u.percent}%`, downloaded: `v${u.version} sẵn sàng cài`}[u.event];
     chip.hidden = !text;
     chip.textContent = text ?? '';
+    $('btnUpdate').disabled = u.event === 'checking' || u.event === 'downloading';
 });
+$('btnUpdate').onclick = () => ipcRenderer.send('check-for-updates');
 
 // ---------- Tabs (nav chính + tab con trong Cấu hình / Test: mỗi nav chỉ bật/tắt các view của nó) ----------
 document.querySelectorAll('[data-view]').forEach(btn => btn.onclick = () => {

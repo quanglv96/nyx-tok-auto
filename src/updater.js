@@ -14,6 +14,7 @@ const TAR = path.join(process.env.SystemRoot ?? 'C:\\Windows', 'System32', 'tar.
 
 const {autoUpdater} = pkg;
 let isSetup = false;
+let manual = false; // lần kiểm tra do bấm nút → báo cả khi không có bản mới / lỗi
 
 export function setupAutoUpdater(win) {
     if (isSetup) return;
@@ -25,6 +26,7 @@ export function setupAutoUpdater(win) {
     autoUpdater.allowDowngrade = false;
 
     const sendUpdate = (event, data = {}) => win?.webContents.send('updater', {event, ...data});
+    const notify = (type, message, detail) => manual && dialog.showMessageBox(win, {type, title: 'Cập nhật', message, detail});
 
     autoUpdater.on('checking-for-update', () => {
         log('UPDATER', '🔍 Kiểm tra bản cập nhật...');
@@ -55,6 +57,7 @@ export function setupAutoUpdater(win) {
     autoUpdater.on('update-not-available', (info) => {
         log('UPDATER', `✅ Đang dùng bản mới nhất v${info.version}`);
         sendUpdate('idle');
+        notify('info', `✅ Đang dùng bản mới nhất v${VERSION}`);
     });
 
     autoUpdater.on('download-progress', (p) => {
@@ -82,6 +85,7 @@ export function setupAutoUpdater(win) {
     autoUpdater.on('error', (err) => {
         log('UPDATER', `❌ Lỗi cập nhật: ${err.message}`, 'error');
         sendUpdate('error', {message: err.message});
+        notify('error', '❌ Lỗi cập nhật', err.message.split('\n')[0]);
     });
 
     // true = đã xử lý bằng code update; false = cần bộ cài đầy đủ
@@ -94,10 +98,25 @@ export function setupAutoUpdater(win) {
         if (!newer(version, VERSION)) {
             log('UPDATER', `✅ Đang dùng bản mới nhất v${VERSION}`);
             sendUpdate('idle');
+            notify('info', `✅ Đang dùng bản mới nhất v${VERSION}`);
             return true;
         }
         const asset = rel.assets.find(a => a.name === 'code.tgz');
         if (!asset) return false;
+
+        const {response: ok} = await dialog.showMessageBox(win, {
+            type: 'info',
+            title: 'Có bản cập nhật',
+            message: `🆕 Phiên bản ${version} đã có (đang dùng v${VERSION})`,
+            detail: 'Tải bản mới ngay?',
+            buttons: ['Tải ngay', 'Để sau'],
+            defaultId: 0,
+            cancelId: 1,
+        });
+        if (ok !== 0) {
+            sendUpdate('idle');
+            return true;
+        }
 
         log('UPDATER', `🆕 Có bản mới v${version} — tải code...`, 'ok');
         sendUpdate('downloading', {percent: 0});
@@ -137,8 +156,12 @@ export function setupAutoUpdater(win) {
         return true;
     }
 
-    const check = async () => {
-        if (!app.isPackaged) return log('UPDATER', '⚠️ Dev mode — bỏ qua kiểm tra cập nhật', 'warn');
+    const check = async (isManual = false) => {
+        manual = isManual;
+        if (!app.isPackaged) {
+            notify('warning', '⚠️ Dev mode — không kiểm tra cập nhật');
+            return log('UPDATER', '⚠️ Dev mode — bỏ qua kiểm tra cập nhật', 'warn');
+        }
         const done = await codeUpdate().catch(err => {
             log('UPDATER', `⚠️ Code update lỗi: ${err.message} — thử bộ cài đầy đủ`, 'warn');
             return false;
@@ -147,5 +170,5 @@ export function setupAutoUpdater(win) {
     };
     setTimeout(check, 3000);
     ipcMain.removeAllListeners('check-for-updates');
-    ipcMain.on('check-for-updates', check);
+    ipcMain.on('check-for-updates', () => check(true));
 }
