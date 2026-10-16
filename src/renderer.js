@@ -45,6 +45,7 @@ function addLog({type, msg}) {
 async function loadConfig() {
     const cfg = await ipcRenderer.invoke('get-config');
     FIELDS.forEach(f => $(f).type === 'checkbox' ? $(f).checked = !!cfg[f] : $(f).value = cfg[f] ?? '');
+    syncPlatforms();
     urls = parseUrls(cfg.searchUrls ?? '');
     renderUrls();
     $('version').textContent = `v${cfg.version}`;
@@ -137,6 +138,13 @@ $('btnUrlAdd').onclick = addUrls;
 $('urlNew').onkeydown = e => { if (e.key === 'Enter') addUrls(); }; // không return false — sẽ chặn mọi phím gõ
 // Dán URL hợp lệ → thêm luôn, không cần Enter (chờ giá trị dán vào ô xong mới đọc)
 $('urlNew').onpaste = () => setTimeout(() => parseUrls($('urlNew').value).length && addUrls());
+
+// Tích chọn nền tảng đăng: bỏ tích thì khoá ô caption/hashtag tương ứng, lưu ngay
+function syncPlatforms() {
+    $('caption').disabled = !$('tiktokEnabled').checked;
+    $('fbHashtags').disabled = !$('fbEnabled').checked;
+}
+for (const id of ['tiktokEnabled', 'fbEnabled']) $(id).onchange = () => { syncPlatforms(); call('save-config', readForm()); };
 
 $('btnSave').onclick =() => call('save-config', readForm());
 $('btnStart').onclick = async () => {

@@ -129,6 +129,7 @@ export class Pipeline {
         if (this.humanSlots.length && humanPerDay > 0) this.humanSlots = splitSlots(this.humanSlots, humanPerDay);
         if (cfg.humanEnabled && !this.humanSlots.length) throw new Error('Đã bật human action nhưng chưa nhập khung giờ lướt');
         this.humanMinutes = cfg.humanEnabled ? parseMinutes(cfg.humanMinutes) : null;
+        if (!cfg.tiktokEnabled && !cfg.fbEnabled) throw new Error('Chưa tích chọn nền tảng đăng (TikTok / Facebook)');
     }
 
     async start() {

@@ -14,7 +14,7 @@ const defaults = () => ({
     chromeProfileDir: '',  // trống = <dataDir>/chrome-profile
     caption: '#meo #cute #fyp',
     tiktokEnabled: true,   // tắt để test riêng Facebook
-    fbEnabled: true,       // đăng thước phim Facebook sau TikTok (dù TikTok lỗi)
+    fbEnabled: true,       // đăng thước phim Facebook (sau TikTok nếu bật, dù TikTok lỗi)
     fbHashtags: '',        // trống = dùng hashtag trong caption
     videosPerUrl: 3,
     delayMinutes: 15,
