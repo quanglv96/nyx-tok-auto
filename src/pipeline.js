@@ -70,10 +70,14 @@ export function pickSlot(slots, now, after = 0, rand = Math.random) {
     return null;
 }
 
-// Lên lịch 24h tới: các khung liên tiếp sau `after`, mỗi khung 1 mốc random
+// Lên lịch hết ngày: các khung còn lại trong ngày của khung kế tiếp, mỗi khung 1 mốc random (hết ngày mới lên ngày sau)
 export function planDay(slots, now, after = 0, rand = Math.random) {
     const out = [];
-    for (let s; (s = pickSlot(slots, now, after, rand)) && s.start < now + DAY_MS; after = s.start) out.push(s);
+    let dayEnd = Infinity;
+    for (let s; (s = pickSlot(slots, now, after, rand)) && s.start < dayEnd; after = s.start) {
+        if (!out.length) dayEnd = new Date(s.start).setHours(24, 0, 0, 0);
+        out.push(s);
+    }
     return out;
 }
 
@@ -398,7 +402,7 @@ ID video: ${v.id}`);
         this.postSlot = slot;
         this.#savePlan();
         log('RUN', `🗓️ Hẹn crawl & đăng lúc ${fmtTime(slot.at)}`);
-        await this.#waitUntil(slot.at, `chờ tới ${fmtTime(slot.at)}`);
+        await this.#waitUntil(slot.at, `đăng lúc ${fmtTime(slot.at)}`);
     }
 
     async #wait() {
@@ -410,7 +414,10 @@ ID video: ${v.id}`);
     async #waitUntil(end, label) {
         while (this.running && Date.now() < end) {
             if (this.humanSlot && Date.now() >= this.humanSlot.at) await this.#human(end);
-            setStep(0, 'wait', `${label} (còn ${Math.ceil((end - Date.now()) / 60_000)} phút)`);
+            // Chỉ hiện mục sắp tới gần nhất: phiên lướt (nếu tới trước) hoặc lượt chờ hiện tại
+            const h = this.humanSlot;
+            const [at, text] = h && h.at > Date.now() && h.at < end ? [h.at, `🧍 lướt ${h.site} lúc ${fmtTime(h.at)}`] : [end, label];
+            setStep(0, 'wait', `${text} (còn ${Math.ceil((at - Date.now()) / 60_000)} phút)`);
             await new Promise(r => setTimeout(r, 1000));
         }
     }
