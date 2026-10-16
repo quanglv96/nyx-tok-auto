@@ -25,6 +25,8 @@ const defaults = () => ({
     scheduleTimes: '05:00-06:00, 12:00-13:00, 20:00-21:00',
     postsPerDay: 3,        // >0: chia khoảng giờ trên thành n khung đều nhau
     humanEnabled: true,    // lúc chờ thỉnh thoảng lướt TikTok/Facebook như người thật (src/human.js)
+    humanTiktok: true,     // được lướt TikTok (độc lập với tích chọn đăng)
+    humanFacebook: true,   // được lướt Facebook
     humanLikeRate: 10,     // % video/post được like, tối đa 3 like / phiên
     humanTimes: '07:00-11:00, 13:00-17:00, 19:00-23:00', // khung giờ được lướt
     humanPerDay: 4,        // >0: chia khoảng giờ trên thành n khung, mỗi khung 1 phiên

@@ -142,6 +142,8 @@ export class Pipeline {
         if (this.humanSlots.length && humanPerDay > 0) this.humanSlots = splitSlots(this.humanSlots, humanPerDay);
         if (cfg.humanEnabled && !this.humanSlots.length) throw new Error('Đã bật human action nhưng chưa nhập khung giờ lướt');
         this.humanMinutes = cfg.humanEnabled ? parseMinutes(cfg.humanMinutes) : null;
+        this.humanSites = [cfg.humanTiktok && 'tiktok', cfg.humanFacebook && 'facebook'].filter(Boolean);
+        if (cfg.humanEnabled && !this.humanSites.length) throw new Error('Đã bật human action nhưng chưa tích Lướt TikTok / Lướt Facebook');
         if (!cfg.tiktokEnabled && !cfg.fbEnabled) throw new Error('Chưa tích chọn nền tảng đăng (TikTok / Facebook)');
     }
 
@@ -351,7 +353,7 @@ ID video: ${v.id}`);
     // Đổi khung giờ / nền tảng trong cấu hình thì lên lịch mới.
     #loadPlan() {
         this.planFile = path.join(this.cfg.dataDir, 'plan.json');
-        this.planKey = JSON.stringify([this.slots, this.humanSlots, this.cfg.tiktokEnabled, this.cfg.fbEnabled]);
+        this.planKey = JSON.stringify([this.slots, this.humanSlots, this.cfg.tiktokEnabled, this.cfg.fbEnabled, this.humanSites]);
         try {
             const saved = JSON.parse(fs.readFileSync(this.planFile, 'utf8'));
             if (saved.key === this.planKey) this.plan = saved.plan;
@@ -385,9 +387,9 @@ ID video: ${v.id}`);
         if (e) return e;
         const slots = kind === 'post' ? this.slots : this.humanSlots;
         const after = Math.max(0, ...this.plan.filter(e => e.kind === kind).map(e => e.start));
-        const sites = [this.cfg.tiktokEnabled && 'tiktok', this.cfg.fbEnabled && 'facebook'].filter(Boolean);
+        const sites = this.humanSites;
         this.plan.push(...planDay(slots, Date.now(), after).map(s => ({
-            kind, ...s, status: 'pending', ...kind === 'human' && {site: sites[Math.floor(Math.random() * sites.length)] ?? 'tiktok'},
+            kind, ...s, status: 'pending', ...kind === 'human' && {site: sites[Math.floor(Math.random() * sites.length)]},
         })));
         this.#savePlan();
         return this.plan.find(e => e.kind === kind && e.status === 'pending');

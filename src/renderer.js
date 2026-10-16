@@ -2,7 +2,7 @@ const {ipcRenderer} = require('electron');
 
 const $ = id => document.getElementById(id);
 const FIELDS = ['dataDir', 'searchUrls', 'caption', 'tiktokEnabled', 'fbEnabled', 'fbHashtags', 'videosPerUrl', 'delayMinutes', 'maxScrolls',
-    'chromePath', 'chromeProfileDir', 'telegramToken', 'telegramAdmin', 'scheduleEnabled', 'scheduleTimes', 'postsPerDay', 'humanEnabled', 'humanLikeRate', 'humanTimes', 'humanPerDay', 'humanMinutes', 'autoStart', 'autoRun',
+    'chromePath', 'chromeProfileDir', 'telegramToken', 'telegramAdmin', 'scheduleEnabled', 'scheduleTimes', 'postsPerDay', 'humanEnabled', 'humanTiktok', 'humanFacebook', 'humanLikeRate', 'humanTimes', 'humanPerDay', 'humanMinutes', 'autoStart', 'autoRun',
     'tfRandom', 'tfRotate', 'tfColor', 'tfFps', 'tfAudio', 'tfPip', 'reactionPath'];
 const STEPS = ['B1 Truy cập nguồn', 'B2 Quét video', 'B3 Lọc video mới', 'B4 Tải video', 'B5 Đăng TikTok', 'B6 Đăng Facebook', 'B7 Thông báo & xoá'];
 const MAX_LOG_LINES = 1500;

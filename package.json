@@ -1,7 +1,7 @@
 {
   "name": "ntt-auto",
   "productName": "NTT Auto",
-  "version": "1.0.7",
+  "version": "1.0.8",
   "description": "Crawl video Pinterest -> đăng TikTok Studio",
   "type": "module",
   "main": "src/boot.js",
