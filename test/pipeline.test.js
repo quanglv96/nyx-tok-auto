@@ -3,7 +3,7 @@ import assert from 'node:assert/strict';
 import fs from 'fs';
 import os from 'os';
 import path from 'path';
-import {IdStore, parseSchedule, pickSlot, shuffle, splitSlots} from '../src/pipeline.js';
+import {IdStore, parseSchedule, pickSlot, planDay, shuffle, splitSlots} from '../src/pipeline.js';
 import {extractVideos} from '../src/crawlers/pinterest.js';
 import {crawlerFor} from '../src/crawlers/index.js';
 import {pickHumanSession, parseMinutes} from '../src/human.js';
@@ -68,6 +68,14 @@ test('pickSlot chọn phút random trong khung, mỗi khung 1 lần, sang ngày 
         const r = pickSlot(slots, at(7, 0));
         assert.ok(r.at >= at(8, 0) && r.at < at(9, 0));
     }
+});
+
+test('planDay lên lịch 24h tới, tăng dần, bỏ khung đã dùng', () => {
+    const slots = parseSchedule('08:00-09:00, 20:00-21:00');
+    const at = (h, m, d = 14) => new Date(2026, 9, d, h, m).getTime();
+    const p = planDay(slots, at(8, 30), 0, () => 0);
+    assert.deepEqual(p.map(s => s.at), [at(8, 30), at(20, 0), at(8, 0, 15)]);
+    assert.deepEqual(planDay(slots, at(8, 30), at(8, 0), () => 0).map(s => s.start), [at(20, 0), at(8, 0, 15)]);
 });
 
 test('splitSlots chia 05:00-23:00 thành n khung đều', () => {

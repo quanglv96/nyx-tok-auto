@@ -12,6 +12,7 @@ import {sendTelegram} from './telegram.js';
 import {transformVideo, tfEnabled, tfTag, randomOpts} from './transform.js';
 
 const DOWNLOAD_TIMEOUT_MS = 15 * 60_000;
+const DAY_MS = 86_400_000;
 
 // File id đã crawl (cả video lỗi) — mỗi dòng 1 id, chỉ append
 export class IdStore {
@@ -69,6 +70,13 @@ export function pickSlot(slots, now, after = 0, rand = Math.random) {
     return null;
 }
 
+// Lên lịch 24h tới: các khung liên tiếp sau `after`, mỗi khung 1 mốc random
+export function planDay(slots, now, after = 0, rand = Math.random) {
+    const out = [];
+    for (let s; (s = pickSlot(slots, now, after, rand)) && s.start < now + DAY_MS; after = s.start) out.push(s);
+    return out;
+}
+
 // Fisher–Yates: mỗi vòng dùng URL theo thứ tự ngẫu nhiên, mỗi URL đúng 1 lần
 export function shuffle(arr, rand = Math.random) {
     const a = [...arr];
@@ -110,10 +118,11 @@ export function downloadVideo(env, url, dir, filename, {onChild, onProgress, onL
 export class Pipeline {
     running = false;
     stats = {found: 0, downloaded: 0, uploaded: 0, failed: 0};
-    lastSlot = 0;
     lastPostAt = 0;
     slotOpen = false; // đã tới giờ của khung hiện tại, đang crawl/đăng
-    humanSlot = null; // phiên lướt TikTok/FB kế tiếp: {start, end, at}
+    humanSlot = null; // phiên lướt TikTok/FB kế tiếp (1 mục trong plan)
+    postSlot = null; // khung đăng đang chờ / đang crawl (1 mục trong plan)
+    plan = []; // lịch đã lên: {kind: 'post'|'human', start, end, at, site?, status: 'pending'|'done'|'skip'}
 
     constructor(cfg, env) {
         this.cfg = cfg;
@@ -136,6 +145,7 @@ export class Pipeline {
         this.running = true;
         this.ids = new IdStore(path.join(this.cfg.dataDir, 'crawled_ids.txt'));
         this.videoDir = path.join(this.cfg.dataDir, 'videos');
+        this.#loadPlan();
         this.#emitStats();
         log('RUN', `▶️ Bắt đầu | đã có ${this.ids.size} id trong lịch sử`);
         const hhmm = m => `${String(Math.floor(m / 60) % 24).padStart(2, '0')}:${String(m % 60).padStart(2, '0')}`;
@@ -189,7 +199,10 @@ export class Pipeline {
                 try {
                     const n = await this.#crawlUrl(url);
                     posted += n;
-                    if (n) this.slotOpen = false;
+                    if (n && this.slotOpen) {
+                        this.slotOpen = false;
+                        this.#mark(this.postSlot, 'done');
+                    }
                 } catch (err) {
                     if (!this.running) break;
                     setStep(1, 'error', err.message);
@@ -330,10 +343,60 @@ ID video: ${v.id}`);
         }
     }
 
+    // Lịch lưu ở <dataDir>/plan.json → app tắt/bật lại (máy lỗi, khởi động lại) vẫn theo mốc cũ.
+    // Đổi khung giờ / nền tảng trong cấu hình thì lên lịch mới.
+    #loadPlan() {
+        this.planFile = path.join(this.cfg.dataDir, 'plan.json');
+        this.planKey = JSON.stringify([this.slots, this.humanSlots, this.cfg.tiktokEnabled, this.cfg.fbEnabled]);
+        try {
+            const saved = JSON.parse(fs.readFileSync(this.planFile, 'utf8'));
+            if (saved.key === this.planKey) this.plan = saved.plan;
+        } catch {}
+        if (this.plan.length) log('RUN', `🗓️ Dùng lại lịch đã lưu (${this.plan.filter(e => e.status === 'pending').length} mục chưa chạy)`);
+        this.#savePlan();
+    }
+
+    #savePlan() {
+        const now = Date.now();
+        this.plan = this.plan.filter(e => e.status === 'pending' || e.at > now - DAY_MS).sort((a, b) => a.at - b.at);
+        try {
+            fs.writeFileSync(this.planFile, JSON.stringify({key: this.planKey, plan: this.plan}));
+        } catch (err) {
+            logWarn('RUN', `Không lưu được lịch: ${err.message}`);
+        }
+        const platforms = [this.cfg.tiktokEnabled && 'TikTok', this.cfg.fbEnabled && 'Facebook'].filter(Boolean).join(', ');
+        const site = {tiktok: 'TikTok', facebook: 'Facebook'};
+        bus.emit('plan', this.plan.map(e => ({at: e.at, status: e.status, text: e.kind === 'post' ? `Đăng ${platforms}` : `Lướt ${site[e.site]}`})));
+    }
+
+    #mark(e, status) {
+        if (!e) return;
+        e.status = status;
+        this.#savePlan();
+    }
+
+    // Mục chưa chạy kế tiếp; hết thì lên lịch thêm 24h
+    #next(kind) {
+        let e = this.plan.find(e => e.kind === kind && e.status === 'pending');
+        if (e) return e;
+        const slots = kind === 'post' ? this.slots : this.humanSlots;
+        const after = Math.max(0, ...this.plan.filter(e => e.kind === kind).map(e => e.start));
+        const sites = [this.cfg.tiktokEnabled && 'tiktok', this.cfg.fbEnabled && 'facebook'].filter(Boolean);
+        this.plan.push(...planDay(slots, Date.now(), after).map(s => ({
+            kind, ...s, status: 'pending', ...kind === 'human' && {site: sites[Math.floor(Math.random() * sites.length)] ?? 'tiktok'},
+        })));
+        this.#savePlan();
+        return this.plan.find(e => e.kind === kind && e.status === 'pending');
+    }
+
     async #waitSlot() {
         // "Chờ (phút)" = khoảng cách tối thiểu với video trước; khung nào bị đẩy quá giờ kết thúc thì bỏ
-        const slot = pickSlot(this.slots, Math.max(Date.now(), this.lastPostAt + this.delayMs), this.lastSlot);
-        this.lastSlot = slot.start;
+        const min = Math.max(Date.now(), this.lastPostAt + this.delayMs);
+        let slot;
+        while ((slot = this.#next('post')).end < min) this.#mark(slot, 'skip');
+        if (slot.at < min) slot.at = min; // lỡ mốc (app tắt / chờ giãn cách) → chạy ngay khi được
+        this.postSlot = slot;
+        this.#savePlan();
         log('RUN', `🗓️ Hẹn crawl & đăng lúc ${fmtTime(slot.at)}`);
         await this.#waitUntil(slot.at, `chờ tới ${fmtTime(slot.at)}`);
     }
@@ -353,7 +416,7 @@ ID video: ${v.id}`);
     }
 
     #planHuman() {
-        this.humanSlot = pickSlot(this.humanSlots, Date.now(), this.humanSlot?.start);
+        this.humanSlot = this.#next('human');
         log('HUMAN', `🧍 Hẹn lướt lúc ${fmtTime(this.humanSlot.at)}`);
     }
 
@@ -361,15 +424,17 @@ ID video: ${v.id}`);
     async #human(end) {
         if (Date.now() > this.humanSlot.end) {
             logWarn('HUMAN', 'Hết khung lướt mà chưa có lúc rảnh — bỏ phiên này');
+            this.#mark(this.humanSlot, 'skip');
             return this.#planHuman();
         }
         const until = pickHumanSession(Date.now(), end, this.humanMinutes);
         if (!until) return; // lần chờ này quá ngắn
-        const sites = [this.cfg.tiktokEnabled && 'tiktok', this.cfg.fbEnabled && 'facebook'].filter(Boolean);
-        const site = sites[Math.floor(Math.random() * sites.length)] ?? 'tiktok';
+        const {site} = this.humanSlot;
         setStep(0, 'wait', `🧍 lướt ${site} tới ${fmtTime(until)}`);
         await humanSession(this.ctx, site, until, () => this.running, Number(this.cfg.humanLikeRate) || 0);
-        if (this.running) this.#planHuman();
+        if (!this.running) return;
+        this.#mark(this.humanSlot, 'done');
+        this.#planHuman();
     }
 
     #emitStats() {

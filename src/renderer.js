@@ -172,6 +172,11 @@ ipcRenderer.on('log', (_, d) => addLog(d));
 ipcRenderer.on('step', (_, d) => setStep(d));
 ipcRenderer.on('env', (_, d) => setEnv(d));
 ipcRenderer.on('stats', (_, s) => Object.entries(s).forEach(([k, v]) => $(`st-${k}`) && ($(`st-${k}`).textContent = v)));
+const fmtTime = ts => new Date(ts).toLocaleString('vi-VN', {hour: '2-digit', minute: '2-digit', day: '2-digit', month: '2-digit'});
+ipcRenderer.on('plan', (_, plan) => $('plan').replaceChildren(...plan.map(e => Object.assign(document.createElement('div'), {
+    className: e.status,
+    textContent: `${{done: '✅', skip: '⏭️', pending: '⬜'}[e.status]} ${fmtTime(e.at)} ${e.text}`,
+}))));
 ipcRenderer.on('state', (_, {running}) => {
     $('btnStart').disabled = running;
     $('btnStop').disabled = !running;

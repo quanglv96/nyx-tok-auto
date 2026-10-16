@@ -25,14 +25,15 @@
         input:disabled { opacity: .45; }
         button.primary { background: var(--accent); font-weight: 600; }
         button.danger { background: #3a1d22; color: var(--err); }
-        main { flex: 1; display: grid; grid-template-columns: 170px 1fr; min-height: 0; }
-        nav.side { border-right: 1px solid var(--line); background: var(--panel); padding: 12px 8px; display: flex; flex-direction: column; gap: 4px; }
-        nav.side button { text-align: left; background: transparent; padding: 9px 12px; }
-        nav.side button.active { background: var(--accent); font-weight: 600; }
+        nav.top { display: flex; gap: 4px; padding: 6px 18px; border-bottom: 1px solid var(--line); background: var(--panel); }
+        nav.top button { background: transparent; padding: 7px 14px; }
+        nav.top button.active { background: var(--accent); font-weight: 600; }
+        main { flex: 1; display: grid; grid-template-columns: 230px 1fr; min-height: 0; }
+        aside { border-right: 1px solid var(--line); background: var(--panel); padding: 0 10px 12px; overflow-y: auto; }
         .panel { max-width: 720px; padding-bottom: 8px; }
         #cfgView, #testView { overflow-y: auto; }
         h3 { font-size: 13px; margin: 18px 0 4px; }
-        section h2 { font-size: 12px; text-transform: uppercase; letter-spacing: 1px; color: var(--muted); margin: 14px 0 8px; }
+        section h2, aside h2 { font-size: 12px; text-transform: uppercase; letter-spacing: 1px; color: var(--muted); margin: 14px 0 8px; }
         label { display: block; margin: 10px 0 4px; color: var(--muted); font-size: 12px; }
         input, textarea, select { width: 100%; background: var(--bg); color: var(--text); border: 1px solid var(--line); border-radius: 6px; padding: 7px 9px; font: inherit; }
         input:focus, textarea:focus { outline: none; border-color: var(--accent); }
@@ -61,6 +62,10 @@
         .logbar { display: flex; align-items: center; gap: 8px; }
         .logbar h2 { flex: 1; }
         .logbox { flex: 1; min-height: 0; overflow-y: auto; background: #0a0c0f; border: 1px solid var(--line); border-radius: 8px; padding: 8px 10px; font: 12px/1.5 Consolas, monospace; white-space: pre-wrap; word-break: break-all; }
+        .plan { display: flex; flex-direction: column; gap: 4px; }
+        .plan div { background: var(--bg); border: 1px solid var(--line); border-radius: 6px; padding: 4px 9px; font-size: 12px; font-variant-numeric: tabular-nums; }
+        .plan .done { color: var(--ok); }
+        .plan .skip { color: var(--muted); text-decoration: line-through; }
         label.check { color: var(--text); display: flex; align-items: center; gap: 6px; margin: 6px 0; }
         label.check input { width: auto; }
         .tabs { display: flex; flex-wrap: wrap; gap: 6px; padding: 12px 0 2px; }
@@ -88,12 +93,16 @@
     <button id="btnStart" class="primary">▶ Bắt đầu</button>
     <button id="btnStop" class="danger" disabled>■ Dừng</button>
 </header>
+<nav class="top">
+    <button data-view="dashView" class="active">📊 Tiến trình</button>
+    <button data-view="cfgView">⚙️ Cấu hình</button>
+    <button data-view="testView">🧪 Test</button>
+</nav>
 <main>
-    <nav class="side">
-        <button data-view="dashView" class="active">📊 Tiến trình</button>
-        <button data-view="cfgView">⚙️ Cấu hình</button>
-        <button data-view="testView">🧪 Test</button>
-    </nav>
+    <aside>
+        <h2>Lịch đã lên</h2>
+        <div id="plan" class="plan"><span class="hint">Chưa có lịch — bật Lịch đăng / Human action rồi bấm Bắt đầu.</span></div>
+    </aside>
     <section>
         <div class="view" id="dashView">
         <h2>Tiến trình</h2>

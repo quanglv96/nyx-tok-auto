@@ -27,7 +27,7 @@ let autoStarted = false;
 let testRunning = false; // test tính năng đang chạy — bấm Dừng test thì false
 
 const send = (channel, data) => win?.webContents.send(channel, data);
-for (const ch of ['log', 'step', 'stats']) bus.on(ch, d => send(ch, d));
+for (const ch of ['log', 'step', 'stats', 'plan']) bus.on(ch, d => send(ch, d));
 
 function checkEnv() {
     envPromise ??= ensureEnv(loadConfig())
