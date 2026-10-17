@@ -138,8 +138,8 @@ export class Pipeline {
         this.humanSlots = cfg.humanEnabled ? parseSchedule(cfg.humanTimes) : [];
         if (cfg.humanEnabled && !this.humanSlots.length) throw new Error('Đã bật human action nhưng chưa tick khung giờ lướt nào');
         this.humanMinutes = cfg.humanEnabled ? parseMinutes(cfg.humanMinutes) : null;
-        this.humanSites = [cfg.humanTiktok && 'tiktok', cfg.humanFacebook && 'facebook'].filter(Boolean);
-        if (cfg.humanEnabled && !this.humanSites.length) throw new Error('Đã bật human action nhưng chưa tích Lướt TikTok / Lướt Facebook');
+        this.humanSites = [cfg.humanTiktok && 'tiktok', cfg.humanFacebook && 'facebook', cfg.humanXhs && 'xiaohongshu'].filter(Boolean);
+        if (cfg.humanEnabled && !this.humanSites.length) throw new Error('Đã bật human action nhưng chưa tích Lướt TikTok / Facebook / Xiaohongshu');
         if (!cfg.tiktokEnabled && !cfg.fbEnabled) throw new Error('Chưa tích chọn nền tảng đăng (TikTok / Facebook)');
     }
 
@@ -174,6 +174,19 @@ export class Pipeline {
             setStep(0, 'idle');
             log('RUN', '⏹️ Đã dừng');
         }
+    }
+
+    // Đổi cấu hình lịch lúc đang chạy: bỏ các mục chưa chạy rồi lên lịch mới ngay, không ngắt lượt crawl/đăng/lướt đang dở
+    replan(cfg) {
+        const next = new Pipeline(cfg, this.env); // kiểm tra cấu hình mới như lúc Bắt đầu
+        Object.assign(this, {cfg, delayMs: next.delayMs, slots: next.slots, humanSlots: next.humanSlots, humanMinutes: next.humanMinutes, humanSites: next.humanSites});
+        const busy = e => (this.slotOpen && e === this.postSlot) || (e === this.humanSlot && Date.now() >= e.at);
+        this.plan = this.plan.filter(e => e.status !== 'pending' || busy(e));
+        this.planKey = this.#planKey();
+        this.#savePlan();
+        log('RUN', '🔄 Đã cập nhật lịch theo cấu hình mới');
+        if (!this.humanSlot || !busy(this.humanSlot)) this.#planHuman();
+        this.replanned = true; // #waitSlot / #wait đang chờ thì tính lại mốc
     }
 
     stop() {
@@ -354,13 +367,17 @@ ID video: ${v.id}`);
     // Đổi khung giờ / nền tảng trong cấu hình thì lên lịch mới.
     #loadPlan() {
         this.planFile = path.join(this.cfg.dataDir, 'plan.json');
-        this.planKey = JSON.stringify([this.slots, this.humanSlots, this.cfg.tiktokEnabled, this.cfg.fbEnabled, this.humanSites]);
+        this.planKey = this.#planKey();
         try {
             const saved = JSON.parse(fs.readFileSync(this.planFile, 'utf8'));
             if (saved.key === this.planKey) this.plan = saved.plan;
         } catch {}
         if (this.plan.length) log('RUN', `🗓️ Dùng lại lịch đã lưu (${this.plan.filter(e => e.status === 'pending').length} mục chưa chạy)`);
         this.#savePlan();
+    }
+
+    #planKey() {
+        return JSON.stringify([this.slots, this.humanSlots, this.cfg.tiktokEnabled, this.cfg.fbEnabled, this.humanSites]);
     }
 
     #savePlan() {
@@ -372,7 +389,7 @@ ID video: ${v.id}`);
             logWarn('RUN', `Không lưu được lịch: ${err.message}`);
         }
         const platforms = [this.cfg.tiktokEnabled && 'TikTok', this.cfg.fbEnabled && 'Facebook'].filter(Boolean).join(', ');
-        const site = {tiktok: 'TikTok', facebook: 'Facebook'};
+        const site = {tiktok: 'TikTok', facebook: 'Facebook', xiaohongshu: 'Xiaohongshu'};
         bus.emit('plan', this.plan.map(e => ({at: e.at, status: e.status, text: e.kind === 'post' ? `Đăng ${platforms}` : `Lướt ${site[e.site]}`})));
     }
 
@@ -397,25 +414,33 @@ ID video: ${v.id}`);
     }
 
     async #waitSlot() {
-        // "Chờ (phút)" = khoảng cách tối thiểu với video trước; khung nào bị đẩy quá giờ kết thúc thì bỏ
-        const min = Math.max(Date.now(), this.lastPostAt + this.delayMs);
-        let slot;
-        while ((slot = this.#next('post')).end < min) this.#mark(slot, 'skip');
-        if (slot.at < min) slot.at = min; // lỡ mốc (app tắt / chờ giãn cách) → chạy ngay khi được
-        this.postSlot = slot;
-        this.#savePlan();
-        log('RUN', `🗓️ Hẹn crawl & đăng lúc ${fmtTime(slot.at)}`);
-        await this.#waitUntil(slot.at, `đăng lúc ${fmtTime(slot.at)}`);
+        do {
+            this.replanned = false;
+            if (!this.slots.length) return; // vừa tắt lịch đăng → đăng luôn
+            // "Chờ (phút)" = khoảng cách tối thiểu với video trước; khung nào bị đẩy quá giờ kết thúc thì bỏ
+            const min = Math.max(Date.now(), this.lastPostAt + this.delayMs);
+            let slot;
+            while ((slot = this.#next('post')).end < min) this.#mark(slot, 'skip');
+            if (slot.at < min) slot.at = min; // lỡ mốc (app tắt / chờ giãn cách) → chạy ngay khi được
+            this.postSlot = slot;
+            this.#savePlan();
+            log('RUN', `🗓️ Hẹn crawl & đăng lúc ${fmtTime(slot.at)}`);
+            await this.#waitUntil(slot.at, `đăng lúc ${fmtTime(slot.at)}`);
+        } while (this.running && this.replanned);
     }
 
     async #wait() {
         if (!this.delayMs) return;
         log('RUN', `⏳ Chờ ${this.delayMs / 60_000} phút...`);
-        await this.#waitUntil(Date.now() + this.delayMs, 'chờ');
+        const end = Date.now() + this.delayMs;
+        do {
+            this.replanned = false;
+            await this.#waitUntil(end, 'chờ');
+        } while (this.running && this.replanned); // cập nhật lịch chỉ cần tính lại phiên lướt, vẫn chờ đủ
     }
 
     async #waitUntil(end, label) {
-        while (this.running && Date.now() < end) {
+        while (this.running && Date.now() < end && !this.replanned) {
             if (this.humanSlot && Date.now() >= this.humanSlot.at) await this.#human(end);
             // Chỉ hiện mục sắp tới gần nhất: phiên lướt (nếu tới trước) hoặc lượt chờ hiện tại
             const h = this.humanSlot;
@@ -426,6 +451,7 @@ ID video: ${v.id}`);
     }
 
     #planHuman() {
+        if (!this.humanSlots.length) return this.humanSlot = null;
         this.humanSlot = this.#next('human');
         log('HUMAN', `🧍 Hẹn lướt lúc ${fmtTime(this.humanSlot.at)}`);
     }

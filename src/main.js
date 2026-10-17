@@ -151,6 +151,11 @@ ipcMain.handle('start', startPipeline);
 
 ipcMain.handle('stop', () => pipeline?.stop());
 
+ipcMain.handle('replan', () => {
+    if (pipeline?.running) pipeline.replan(loadConfig());
+    else log('RUN', '🗓️ Chưa chạy — lịch mới được lên khi bấm Bắt đầu');
+});
+
 // Chrome dùng cho đăng nhập & test tính năng (cùng profile với pipeline → đang chạy thì dùng chung Chrome của pipeline)
 async function toolChrome() {
     if (pipeline?.running) {

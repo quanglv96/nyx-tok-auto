@@ -2,7 +2,7 @@ const {ipcRenderer} = require('electron');
 
 const $ = id => document.getElementById(id);
 const FIELDS = ['dataDir', 'searchUrls', 'xhsUrls', 'pinterestEnabled', 'xhsEnabled', 'caption', 'tiktokEnabled', 'fbEnabled', 'fbHashtags', 'videosPerUrl', 'delayMinutes', 'maxScrolls',
-    'chromePath', 'chromeProfileDir', 'telegramToken', 'telegramAdmin', 'scheduleEnabled', 'scheduleTimes', 'humanEnabled', 'humanTiktok', 'humanFacebook', 'humanLikeRate', 'humanTimes','humanMinutes', 'autoStart', 'autoRun',
+    'chromePath', 'chromeProfileDir', 'telegramToken', 'telegramAdmin', 'scheduleEnabled', 'scheduleTimes', 'humanEnabled', 'humanTiktok', 'humanFacebook', 'humanXhs', 'humanLikeRate', 'humanTimes','humanMinutes', 'autoStart', 'autoRun',
     'tfRandom', 'tfRotate', 'tfColor', 'tfFps', 'tfAudio', 'tfPip', 'reactionPath'];
 const STEPS = ['B1 Truy cập nguồn', 'B2 Quét video', 'B3 Lọc video mới', 'B4 Tải video', 'B5 Đăng TikTok', 'B6 Đăng Facebook', 'B7 Thông báo & xoá'];
 const MAX_LOG_LINES = 1500;
@@ -196,6 +196,7 @@ $('btnStart').onclick = async () => {
     if ($('btnStop').disabled) $('btnStart').disabled = false; // start lỗi
 };
 $('btnStop').onclick = () => call('stop');
+$('btnReplan').onclick = async () => { await call('save-config', readForm()); await call('replan'); };
 $('btnChrome').onclick = async () => { await call('save-config', readForm()); await call('open-chrome'); };
 $('btnTele').onclick = async () => { await call('save-config', readForm()); await call('test-telegram'); };
 $('btnData').onclick = () => call('open-data-dir');
@@ -311,6 +312,7 @@ const TESTS = {
     facebook: () => confirm('Đăng THẬT video này lên Facebook?') && call('test-facebook', $('tFile').value.trim(), readForm()),
     'human-tiktok': () => call('test-human', 'tiktok', $('tHumanMin').value, readForm()),
     'human-facebook': () => call('test-human', 'facebook', $('tHumanMin').value, readForm()),
+    'human-xhs': () => call('test-human', 'xiaohongshu', $('tHumanMin').value, readForm()),
 };
 document.querySelectorAll('[data-test]').forEach(btn => btn.onclick = async () => {
     const all = document.querySelectorAll('.tbtn');

@@ -1,4 +1,4 @@
-// Human action: lúc pipeline đang chờ, thỉnh thoảng lướt TikTok / Facebook như người dùng rảnh rỗi
+// Human action: lúc pipeline đang chờ, thỉnh thoảng lướt TikTok / Facebook / Xiaohongshu như người dùng rảnh rỗi
 // (xem video, đọc post, treo máy, thi thoảng like) để tài khoản trông tự nhiên.
 import {log, logOk, logWarn} from './logger.js';
 
@@ -40,7 +40,8 @@ export async function humanSession(ctx, site, until, isRunning, likeRate) {
     };
     try {
         log(TAG, `🧍 Lướt ${site} tới ${new Date(until).toLocaleTimeString('vi-VN')}`);
-        const n = await (site === 'facebook' ? browseFacebook : browseTiktok)(page, wait, alive, tryLike);
+        const browse = {facebook: browseFacebook, xiaohongshu: browseXhs}[site] ?? browseTiktok;
+        const n = await browse(page, wait, alive, tryLike);
         logOk(TAG, `Xong phiên ${site}: xem ${n} ${site === 'facebook' ? 'lần cuộn' : 'video'}, ${likes} like`);
     } catch (err) {
         if (isRunning()) logWarn(TAG, `Phiên ${site} lỗi: ${err.message}`);
@@ -120,6 +121,60 @@ async function browseFacebook(page, wait, alive, tryLike) {
     return n;
 }
 
+// Lặp: B1 click 1 thẻ video ngẫu nhiên đang hiện → xem → B2 random like → B3 bấm X tắt video → B4 cuộn lưới
+async function browseXhs(page, wait, alive, tryLike) {
+    await page.goto('https://www.xiaohongshu.com/explore', {waitUntil: 'domcontentloaded', timeout: 60_000});
+    const load = rnd(4000, 8000);
+    log(TAG, `⏳ Chờ trang tải ${sec(load)}`);
+    await wait(load);
+    if (!await page.waitForSelector('a.cover', {timeout: 30_000}).catch(() => null))
+        throw new Error('Không thấy thẻ bài nào — chưa đăng nhập Xiaohongshu / bị captcha?');
+    const {w, h} = await page.evaluate(() => ({w: innerWidth, h: innerHeight}));
+    let n = 0;
+    while (alive()) {
+        const card = await pickRandomVideoCard(page);
+        if (!card) {
+            log(TAG, '↓ Không có thẻ video mới trên màn hình — cuộn');
+        } else if (await humanClick(page, card)) {
+            const watch = Math.random() < 0.1 ? rnd(30_000, 90_000) : rnd(3000, 12_000);
+            log(TAG, `${watch > 20_000 ? '😴 Treo' : '👀 Xem'} video #${++n}: ${sec(watch)}`);
+            await wait(watch);
+            const like = alive() && await pickNearCenter(page, '.like-lottie', {minSize: 16, once: true, skip: '.like-active'});
+            if (like) await tryLike(like);
+            else if (alive()) log(TAG, '🤍 Không thấy nút like (hoặc đã like)');
+            const close = await pickNearCenter(page, 'svg:has(use[*|href="#close"])', {minSize: 10});
+            if (!(close && await humanClick(page, close))) await page.keyboard.press('Escape');
+            log(TAG, '✖️ Tắt video');
+            await wait(rnd(1000, 2500));
+        }
+        if (!alive()) break;
+        const dy = rnd(300, 900);
+        await page.mouse.move(w * rnd(0.3, 0.7), h * rnd(0.3, 0.7), {steps: 12});
+        await page.mouse.wheel(0, dy);
+        log(TAG, `🖱️ Cuộn ${Math.round(dy)}px`);
+        await wait(rnd(1500, 4000));
+    }
+    return n;
+}
+
+// Thẻ video (a.cover có .play-icon) chưa xem, nằm trọn trong màn hình, chọn ngẫu nhiên → locator, hoặc null
+async function pickRandomVideoCard(page) {
+    const id = Math.random().toString(36).slice(2);
+    const found = await page.evaluate(id => {
+        const cards = [...document.querySelectorAll('a.cover')].filter(a => {
+            if (a.dataset.nttSeen || !a.querySelector('.play-icon')) return false;
+            const r = a.getBoundingClientRect();
+            return r.height > 50 && r.top >= 0 && r.bottom <= innerHeight;
+        });
+        const a = cards[Math.floor(Math.random() * cards.length)];
+        if (!a) return false;
+        a.dataset.nttSeen = '1';
+        a.dataset.nttPick = id;
+        return true;
+    }, id);
+    return found ? page.locator(`[data-ntt-pick="${id}"]`) : null;
+}
+
 // src của <video> gần giữa màn hình nhất (định danh video đang xem), hoặc null
 const currentVideoSrc = page => page.evaluate(() => {
     let best = null, bestD = Infinity;
@@ -133,14 +188,15 @@ const currentVideoSrc = page => page.evaluate(() => {
 }).catch(() => null);
 
 // Phần tử (nút bao ngoài `sel`) đang hiển thị, đủ to, gần giữa màn hình nhất → locator, hoặc null
-async function pickNearCenter(page, sel, {minSize = 0, once = false, labels = null} = {}) {
+async function pickNearCenter(page, sel, {minSize = 0, once = false, labels = null, skip = null} = {}) {
     const id = Math.random().toString(36).slice(2);
-    const found = await page.evaluate(({sel, minSize, once, labels, id}) => {
+    const found = await page.evaluate(({sel, minSize, once, labels, skip, id}) => {
         let best = null, bestD = Infinity;
         for (const el of document.querySelectorAll(sel)) {
             const t = el.closest('button,[role="button"]') ?? el;
             if (once && t.dataset.nttSeen) continue;
             if (labels && !labels.includes(t.getAttribute('aria-label'))) continue;
+            if (skip && t.closest(skip)) continue; // vd đã like
             const r = t.getBoundingClientRect();
             if (r.width < minSize || r.bottom < 0 || r.top > innerHeight) continue;
             const d = Math.abs(r.top + r.height / 2 - innerHeight / 2);
@@ -150,7 +206,7 @@ async function pickNearCenter(page, sel, {minSize = 0, once = false, labels = nu
         if (once) best.dataset.nttSeen = '1';
         best.dataset.nttPick = id;
         return true;
-    }, {sel, minSize, once, labels, id});
+    }, {sel, minSize, once, labels, skip, id});
     return found ? page.locator(`[data-ntt-pick="${id}"]`) : null;
 }
 

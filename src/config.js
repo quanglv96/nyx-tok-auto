@@ -29,6 +29,7 @@ const defaults = () => ({
     humanEnabled: true,    // lúc chờ thỉnh thoảng lướt TikTok/Facebook như người thật (src/human.js)
     humanTiktok: true,     // được lướt TikTok (độc lập với tích chọn đăng)
     humanFacebook: true,   // được lướt Facebook
+    humanXhs: false,       // được lướt Xiaohongshu (RedNote)
     humanLikeRate: 10,     // % video/post được like, tối đa 3 like / phiên
     humanTimes: '08:00-09:00, 11:00-12:00, 15:00-16:00, 21:00-22:00', // tick theo giờ trên UI, mỗi khung 1 phiên
     humanMinutes: '3-12',  // thời lượng mỗi phiên (phút)

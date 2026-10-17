@@ -96,6 +96,7 @@
     <span class="chip" id="updChip" hidden></span>
     <div class="spacer"></div>
     <button id="btnStart" class="primary">▶ Bắt đầu</button>
+    <button id="btnReplan" title="Lưu cấu hình và lên lại lịch đăng / lướt ngay, không cần dừng">🗓️ Cập nhật lịch</button>
     <button id="btnStop" class="danger" disabled>■ Dừng</button>
 </header>
 <nav class="top">
@@ -206,9 +207,10 @@
             </div>
 
             <div class="panel" id="cfgHuman" hidden>
-                <label class="check"><input type="checkbox" id="humanEnabled"> Lúc chờ thỉnh thoảng lướt TikTok / Facebook (giả lập người dùng rảnh rỗi)</label>
+                <label class="check"><input type="checkbox" id="humanEnabled"> Lúc chờ thỉnh thoảng lướt TikTok / Facebook / Xiaohongshu (giả lập người dùng rảnh rỗi)</label>
                 <label class="check"><input type="checkbox" id="humanTiktok"> Lướt TikTok</label>
                 <label class="check"><input type="checkbox" id="humanFacebook"> Lướt Facebook</label>
+                <label class="check"><input type="checkbox" id="humanXhs"> Lướt Xiaohongshu (RedNote)</label>
                 <label>Tỷ lệ like (%)</label>
                 <input id="humanLikeRate" type="number" min="0" max="100">
                 <label>Khung giờ lướt</label>
@@ -218,7 +220,7 @@
                 <div class="hint">Số giờ đã chọn = <b>số phiên / ngày</b>.</div>
                 <label>Thời lượng mỗi phiên (phút, vd 3-12)</label>
                 <input id="humanMinutes" placeholder="3-12">
-                <div class="hint">Giống lịch đăng: mỗi khung đã tick lướt 1 phiên vào phút ngẫu nhiên trong giờ đó. Chỉ lướt lúc đang chờ và luôn xong trước giờ crawl/đăng 2 phút; tới giờ mà đang đăng thì lướt ở lần chờ sau, hết khung thì bỏ. Mỗi phiên chọn ngẫu nhiên TikTok hoặc Facebook trong các ô đã tick ở trên. Tối đa 3 like / phiên.</div>
+                <div class="hint">Giống lịch đăng: mỗi khung đã tick lướt 1 phiên vào phút ngẫu nhiên trong giờ đó. Chỉ lướt lúc đang chờ và luôn xong trước giờ crawl/đăng 2 phút; tới giờ mà đang đăng thì lướt ở lần chờ sau, hết khung thì bỏ. Mỗi phiên chọn ngẫu nhiên TikTok / Facebook / Xiaohongshu trong các ô đã tick ở trên. Tối đa 3 like / phiên.</div>
             </div>
 
             <div class="panel" id="cfgChrome" hidden>
@@ -270,6 +272,7 @@
                     <input id="tHumanMin" type="number" min="1" value="3" style="max-width:90px" title="Số phút">
                     <button class="tbtn" data-test="human-tiktok">▶ Human TikTok</button>
                     <button class="tbtn" data-test="human-facebook">▶ Human Facebook</button>
+                    <button class="tbtn" data-test="human-xhs">▶ Human Xiaohongshu</button>
                 </div>
                 <div class="hint">Lướt trong số phút đã nhập, tỷ lệ like theo Cấu hình → Human action.</div>
                 <div class="actions"><button id="btnTestStop" class="danger" disabled>■ Dừng test</button></div>
