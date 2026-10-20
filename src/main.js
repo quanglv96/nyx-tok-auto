@@ -5,6 +5,7 @@ import {fileURLToPath} from 'url';
 import {bus, log, logError, logOk, setLogDir} from './logger.js';
 import {loadConfig, saveConfig} from './config.js';
 import {ensureEnv} from './ensureEnv.js';
+import {coverSub} from './subswap.js';
 import crypto from 'crypto';
 import {Pipeline, downloadVideo} from './pipeline.js';
 import {crawlerFor} from './crawlers/index.js';
@@ -102,10 +103,8 @@ const FILE_FILTERS = {chrome: {name: 'Chrome', extensions: ['exe']}, video: {nam
 ipcMain.handle('pick-file', async (_, kind = 'chrome') =>
     (await dialog.showOpenDialog(win, {properties: ['openFile'], filters: [FILE_FILTERS[kind]]})).filePaths[0]);
 
-// Công cụ test: link (Pinterest pin / link video) hoặc file → tải gốc (cache theo link) → xử lý theo tuỳ chọn đang chọn trên form
-ipcMain.handle('test-transform', async (_, source, opts) => {
-    opts = randomOpts(opts); // bật random thì test cũng random như lúc chạy thật
-    const env = await checkEnv();
+// Link (Pinterest pin / link video) → tải gốc vào thư mục test (cache theo link); file trên máy → dùng luôn
+async function testInput(env, source) {
     const dir = path.join(loadConfig().dataDir, 'test');
     let input = source;
     if (/^https?:\/\//i.test(source)) {
@@ -122,18 +121,50 @@ ipcMain.handle('test-transform', async (_, source, opts) => {
     } else if (!source || !fs.existsSync(source)) {
         throw new Error('Nhập link video hoặc chọn file');
     }
+    return input;
+}
+
+// Công cụ test: video nguồn → xử lý theo tuỳ chọn đang chọn trên form
+ipcMain.handle('test-transform', async (_, source, opts) => {
+    opts = randomOpts(opts); // bật random thì test cũng random như lúc chạy thật
+    const env = await checkEnv();
+    const input = await testInput(env, source);
+    const dir = path.join(loadConfig().dataDir, 'test');
     fs.mkdirSync(dir, {recursive: true});
     const output = path.join(dir, `${path.parse(input).name}__${tfTag(opts)}.mp4`);
     const t = Date.now();
+    // giống pipeline: có sub thì che trước, rồi mới áp hiệu ứng
+    const sub = opts.subCover ? await coverSub(env.ffmpeg, input, path.join(loadConfig().dataDir, 'subswap'), {
+        onProgress: text => send('test-progress', text),
+        onLog: line => log('SUB', line),
+    }) : null;
+    if (sub && !sub.output) log('SUB', 'Không có sub → bỏ qua che sub');
     log('TEST', `🎬 Xử lý ${path.basename(input)} (${tfTag(opts)})`);
-    const res = await transformVideo(env.ffmpeg, input, opts, {
+    const res = await transformVideo(env.ffmpeg, sub?.output ?? input, opts, {
         output,
         onProgress: pct => send('test-progress', `Đang xử lý ${pct}%`),
         onLog: line => log('TEST', line),
     });
     const seconds = (Date.now() - t) / 1000;
     logOk('TEST', `Xong ${path.basename(output)} sau ${seconds.toFixed(1)}s`);
-    return {input, output: res.output, cmd: cmdLine(env.ffmpeg, res.args), seconds, tag: tfTag(opts)};
+    const cmd = [sub?.output && sub.cmd, cmdLine(env.ffmpeg, res.args)].filter(Boolean).join('\n');
+    return {input, output: res.output, cmd, seconds, tag: [sub?.output && 'che sub', tfTag(opts)].filter(Boolean).join(' + ')};
+});
+
+// ⬛ Che sub: chỉ che sub (subswap/). Kết quả + file trung gian ở <dataDir>/subswap/<tên video>/
+ipcMain.handle('test-sub', async (_, action, source) => {
+    const env = await checkEnv();
+    const input = await testInput(env, source);
+    const t = Date.now();
+    log('SUB', `⬛ Che sub ${path.basename(input)}`);
+    const {output, cmd} = await coverSub(env.ffmpeg, input, path.join(loadConfig().dataDir, 'subswap'), {
+        onProgress: text => send('test-progress', text),
+        onLog: line => log('SUB', line),
+    });
+    if (!output) throw new Error('Không phát hiện sub trong video');
+    const seconds = (Date.now() - t) / 1000;
+    logOk('SUB', `Xong ${output} sau ${seconds.toFixed(1)}s`);
+    return {input, output, cmd, seconds, tag: 'che sub'};
 });
 
 ipcMain.handle('show-file', (_, p) => shell.showItemInFolder(p));

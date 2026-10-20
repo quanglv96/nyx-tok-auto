@@ -10,6 +10,7 @@ import {crawlerFor} from './crawlers/index.js';
 import {humanSession, pickHumanSession, parseMinutes} from './human.js';
 import {sendTelegram} from './telegram.js';
 import {transformVideo, tfEnabled, tfTag, randomOpts} from './transform.js';
+import {coverSub} from './subswap.js';
 
 const DOWNLOAD_TIMEOUT_MS = 15 * 60_000;
 const DAY_MS = 86_400_000;
@@ -147,6 +148,7 @@ export class Pipeline {
         this.running = true;
         this.ids = new IdStore(path.join(this.cfg.dataDir, 'crawled_ids.txt'));
         this.videoDir = path.join(this.cfg.dataDir, 'videos');
+        this.subDir = path.join(this.cfg.dataDir, 'subswap');
         this.#loadPlan();
         this.#emitStats();
         log('RUN', `▶️ Bắt đầu | đã có ${this.ids.size} id trong lịch sử`);
@@ -286,34 +288,54 @@ export class Pipeline {
         return null;
     }
 
-    // B4b: ffmpeg biến đổi video (theo các tuỳ chọn tf*) — lỗi thì bỏ video, không đăng bản gốc
+    // B4b: có sub thì che (subswap), rồi ffmpeg biến đổi video (theo các tuỳ chọn tf*) — lỗi thì bỏ video, không đăng bản gốc
     async #transform(file, v) {
-        if (!file || !tfEnabled(this.cfg)) return file;
-        const opts = randomOpts(this.cfg);
-        setStep(4, 'running', `video ${v.id} — xử lý ffmpeg (${tfTag(opts)})`);
-        if (opts !== this.cfg) log('B4', `🎲 Hiệu ứng random: ${tfTag(opts)}`);
+        if (!file || (!this.cfg.subCover && !tfEnabled(this.cfg))) return file;
+        const temps = [file]; // file trung gian, xoá hết trừ file trả về
+        let cur = file;
         try {
-            const {output: out} = await transformVideo(this.env.ffmpeg, file, opts, {
-                onChild: p => this.child = p,
-                onProgress: pct => setStep(4, 'running', `video ${v.id} — xử lý ffmpeg ${pct}%`),
-                onLog: msg => log('B4', msg),
-            });
-            setStep(4, 'ok', path.basename(out));
-            logOk('B4', `🎬 Đã xử lý ${path.basename(out)}`);
-            return out;
+            if (this.cfg.subCover) {
+                setStep(4, 'running', `video ${v.id} — dò sub`);
+                const {output} = await coverSub(this.env.ffmpeg, cur, this.subDir, {
+                    onChild: p => this.child = p,
+                    onProgress: text => setStep(4, 'running', `video ${v.id} — ${text}`),
+                    onLog: msg => log('B4', msg),
+                });
+                if (output) {
+                    cur = path.join(this.videoDir, `${v.id}_nosub.mp4`);
+                    fs.renameSync(output, cur);
+                    temps.push(cur);
+                    logOk('B4', '⬛ Đã che sub');
+                } else log('B4', 'Không có sub → bỏ qua che sub');
+            }
+            if (tfEnabled(this.cfg)) {
+                const opts = randomOpts(this.cfg);
+                setStep(4, 'running', `video ${v.id} — xử lý ffmpeg (${tfTag(opts)})`);
+                if (opts !== this.cfg) log('B4', `🎲 Hiệu ứng random: ${tfTag(opts)}`);
+                ({output: cur} = await transformVideo(this.env.ffmpeg, cur, opts, {
+                    onChild: p => this.child = p,
+                    onProgress: pct => setStep(4, 'running', `video ${v.id} — xử lý ffmpeg ${pct}%`),
+                    onLog: msg => log('B4', msg),
+                }));
+            }
+            setStep(4, 'ok', path.basename(cur));
+            logOk('B4', `🎬 Đã xử lý ${path.basename(cur)}`);
+            return cur;
         } catch (err) {
+            cur = null;
             if (!this.running) return null;
             this.stats.failed++;
             this.#emitStats();
             setStep(4, 'error', `video ${v.id} xử lý lỗi — tìm video khác`);
-            logError('B4', `ffmpeg lỗi ${v.id}: ${err.message}`);
+            logError('B4', `Xử lý lỗi ${v.id}: ${err.message}`);
             await this.#notify(`❌ B4 xử lý video lỗi
 ID: ${v.id}
 ${err.message}`);
             return null;
         } finally {
             this.child = null;
-            fs.rmSync(file, {force: true});
+            for (const f of temps) if (f !== cur) fs.rmSync(f, {force: true});
+            fs.rmSync(path.join(this.subDir, v.id), {recursive: true, force: true}); // frame OCR, segments...
         }
     }
 

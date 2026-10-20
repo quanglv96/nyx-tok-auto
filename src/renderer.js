@@ -3,7 +3,7 @@ const {ipcRenderer} = require('electron');
 const $ = id => document.getElementById(id);
 const FIELDS = ['dataDir', 'searchUrls', 'xhsUrls', 'pinterestEnabled', 'xhsEnabled', 'caption', 'tiktokEnabled', 'fbEnabled', 'fbHashtags', 'videosPerUrl', 'delayMinutes', 'maxScrolls',
     'chromePath', 'chromeProfileDir', 'telegramToken', 'telegramAdmin', 'scheduleEnabled', 'scheduleTimes', 'humanEnabled', 'humanTiktok', 'humanFacebook', 'humanXhs', 'humanLikeRate', 'humanTimes','humanMinutes', 'autoStart', 'autoRun',
-    'tfRandom', 'tfRotate', 'tfColor', 'tfFps', 'tfAudio', 'tfPip', 'reactionPath'];
+    'tfRandom', 'tfRotate', 'tfColor', 'tfFps', 'tfAudio', 'tfPip', 'reactionPath', 'subCover'];
 const STEPS = ['B1 Truy cập nguồn', 'B2 Quét video', 'B3 Lọc video mới', 'B4 Tải video', 'B5 Đăng TikTok', 'B6 Đăng Facebook', 'B7 Thông báo & xoá'];
 const MAX_LOG_LINES = 1500;
 
@@ -280,11 +280,17 @@ function playBoth(fromStart) {
     vIn.play();
 }
 
-$('btnTest').onclick = async () => {
-    $('btnTest').disabled = true;
+// ▶ Tải & xử lý / ⬛ Che sub: cùng nguồn, cùng khung so sánh gốc ↔ kết quả
+const TF_BUTTONS = [$('btnTest'), ...document.querySelectorAll('.subbtn')];
+$('btnTest').onclick = () => runTf(() => call('test-transform', $('testSource').value.trim(), readForm()));
+document.querySelectorAll('.subbtn').forEach(btn => btn.onclick = () =>
+    runTf(() => call('test-sub', btn.dataset.sub, $('testSource').value.trim(), readForm())));
+
+async function runTf(job) {
+    TF_BUTTONS.forEach(b => b.disabled = true);
     $('testStatus').textContent = 'Đang chạy…';
     try {
-        testResult = await call('test-transform', $('testSource').value.trim(), readForm());
+        testResult = await job();
         if (!testResult) return $('testStatus').textContent = 'Lỗi — xem log';
         $('testCmd').textContent = testResult.cmd;
         await Promise.all([showVideo('testIn', testResult.input), showVideo('testOut', testResult.output)]);
@@ -292,9 +298,9 @@ $('btnTest').onclick = async () => {
         $('testStatus').textContent = `[${testResult.tag}] Xong sau ${testResult.seconds.toFixed(1)}s → ${testResult.output}`;
         $('btnTestShow').disabled = $('btnTestCopy').disabled = false;
     } finally {
-        $('btnTest').disabled = false;
+        TF_BUTTONS.forEach(b => b.disabled = false);
     }
-};
+}
 $('btnTestPlay').onclick = () => vIn.paused ? playBoth(false) : vIn.pause();
 $('btnTestRestart').onclick = () => playBoth(true);
 $('btnTestAudio').onclick = () => {

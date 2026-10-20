@@ -41,6 +41,8 @@ const defaults = () => ({
     tfAudio: false,
     tfPip: false,          // reaction đè góc trên phải — kết hợp được với mọi tuỳ chọn khác
     reactionPath: '',      // PiP: file reaction hoặc thư mục (chọn ngẫu nhiên)
+    subCover: true,        // dò sub tiếng Trung in cứng (OCR cả video) → có thì che bằng kính mờ, không có thì bỏ qua (subswap/)
+    anthropicApiKey: '',   // Claude API key cho dịch sub (subswap/) — nút Dịch sub đang tạm tắt
     telegramToken: '',
     telegramAdmin: '',     // chat id hoặc username (admin phải /start bot trước)
 });

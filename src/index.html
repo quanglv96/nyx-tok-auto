@@ -204,6 +204,8 @@
                 <label>Video reaction cho PiP — tuỳ chọn (1 file, hoặc thư mục để chọn ngẫu nhiên)</label>
                 <div class="row"><input id="reactionPath"><button data-pick-file="reactionPath" data-kind="video" title="Chọn file">🎞</button><button data-pick="reactionPath" title="Chọn thư mục">📁</button></div>
                 <div class="hint">Kết hợp tự do các tuỳ chọn. Không bật gì = đăng video gốc, không xử lý. Có xử lý thì video vừa khung 9:16 (nền mờ nếu khác tỉ lệ), xuất 1080x1920, libx264 CRF 20 + AAC. Reaction ngắn hơn sẽ lặp lại. Thử trước ở Test → Xử lý video.</div>
+                <label class="check"><input type="checkbox" id="subCover"> ⬛ Tự che sub tiếng Trung in cứng (có sub thì che, không có thì bỏ qua)</label>
+                <div class="hint">OCR (PaddleOCR) dò sub trên toàn bộ video → che bằng kính mờ đúng thời gian từng câu, trước các hiệu ứng ở trên. Chậm hơn: OCR ~1–2 phút/video trên CPU. Lần đầu sẽ cài thêm môi trường OCR (~1 GB, vài phút). Thử ở Test → Xử lý video.</div>
             </div>
 
             <div class="panel" id="cfgHuman" hidden>
@@ -286,6 +288,7 @@
                     <input id="testSource" placeholder="https://www.pinterest.com/pin/...">
                     <button data-pick-file="testSource" data-kind="video">📂 File</button>
                     <button id="btnTest" class="primary">▶ Tải & xử lý</button>
+                    <button class="subbtn" data-sub="cover" title="Che sub tiếng Trung in cứng bằng ô che theo thời gian từng câu, không chèn sub mới">⬛ Che sub</button>
                 </div>
                 <div class="hint">Dùng các tuỳ chọn ở Cấu hình → Xử lý video (không cần Lưu). Link đã tải sẽ dùng lại bản gốc, chỉ xử lý lại. Mỗi lần chạy random góc xoay/màu/FPS/pitch khác nhau; bật 🎲 thì random cả bộ hiệu ứng.</div>
                 <div class="hint" id="testStatus"></div>
@@ -298,7 +301,7 @@
                     <button id="btnTestRestart">⏮ Chạy lại từ đầu</button>
                     <button id="btnTestAudio">🔊 Tiếng: đã xử lý</button>
                     <button id="btnTestShow" disabled>📁 Mở file đã xử lý</button>
-                    <button id="btnTestCopy" disabled>📋 Copy lệnh ffmpeg</button>
+                    <button id="btnTestCopy" disabled>📋 Copy lệnh</button>
                 </div>
                 <pre id="testCmd"></pre>
             </div>

@@ -1,7 +1,7 @@
 {
   "name": "ntt-auto",
   "productName": "NTT Auto",
-  "version": "1.0.11",
+  "version": "1.0.12",
   "description": "Crawl video Pinterest / Xiaohongshu -> đăng TikTok Studio",
   "type": "module",
   "main": "src/boot.js",
@@ -30,6 +30,16 @@
       {
         "from": "src/python",
         "to": "python"
+      },
+      {
+        "from": "subswap",
+        "to": "subswap",
+        "filter": [
+          "*.py",
+          "config.yaml",
+          "requirements.txt",
+          "!test_*.py"
+        ]
       }
     ],
     "asar": true,

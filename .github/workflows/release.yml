@@ -34,10 +34,11 @@ jobs:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
       # Bản chỉ-code cho máy đã cài: updater tải file này thay vì cả bộ cài (khi dependencies không đổi)
+      # Có cả subswap/ (cùng bộ lọc như extraResources): code hot-update tìm subswap cạnh src/ (xem ensureSubEnv)
       - name: Upload code-only update
         shell: bash
         run: |
-          tar -czf code.tgz package.json src
+          tar -czf code.tgz package.json src subswap/*.py subswap/config.yaml subswap/requirements.txt
           gh release upload "$GITHUB_REF_NAME" code.tgz --clobber
           gh release edit "$GITHUB_REF_NAME" --draft=false --latest
         env:

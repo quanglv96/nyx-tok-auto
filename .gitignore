@@ -1,3 +1,6 @@
 node_modules/
 dist/
 __pycache__/
+subswap/.venv/
+subswap/work/
+subswap/.env

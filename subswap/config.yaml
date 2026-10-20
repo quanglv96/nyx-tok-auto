@@ -1,0 +1,47 @@
+# Thư mục làm việc: work/<tên_video>/{frames, segments.json, to_translate.txt, translated.txt, sub.ass, output.mp4}
+work_dir: work
+log_file: work/subswap.log
+
+extract:
+  fps: 4                  # số frame/giây đem OCR
+  roi: auto               # auto = tự dò (sub trên/dưới đều được; frame mẫu không thấy chữ → OCR cả khung toàn bộ video) | [x, y, w, h] pixel | null = 25% dưới cùng
+  roi_bottom_ratio: 0.25
+  auto_roi_samples: 15    # số frame lấy mẫu toàn khung khi tự dò ROI
+  preprocess: gray        # none | gray (xám + CLAHE tăng tương phản) | binary (thêm threshold Otsu)
+  dedup_diff: 3.0         # chênh lệch pixel trung bình (0-255) dưới mức này = frame giống frame trước, bỏ OCR
+
+ocr:
+  use_gpu: false
+  model: small            # PP-OCRv6: tiny | small | medium (chính xác hơn, chậm hơn nhiều trên CPU)
+  min_confidence: 0.7
+  similarity: 0.8         # độ giống chuỗi để coi 2 frame là cùng 1 câu sub
+  max_gap_frames: 2       # bỏ qua tối đa N frame OCR lỗi/trống giữa 1 đoạn
+  min_duration: 0.3       # giây; đoạn ngắn hơn bị gộp vào đoạn bên cạnh hoặc bỏ
+  min_height_ratio: 0.6   # bỏ đoạn có chữ thấp hơn 60% cỡ sub trung vị (watermark/ID); 0 = tắt
+
+translate:
+  mode: manual            # manual | auto
+  batch_size: 50
+  retries: 3
+  target_lang: tiếng Việt
+
+render:
+  cover: true             # ô che sub cũ, hiện/tắt cùng lúc với từng câu sub
+  cover_pad: 8            # nới bbox ra mỗi phía (px)
+  cover_color: "ffffff"   # RGB hex
+  cover_opacity: 0.08     # độ đậm lớp màu phủ trên nền mờ; cover_blur: 0 thì nên để 1 (không mờ thì <1 lộ chữ cũ)
+  cover_blur: 10          # kính mờ: độ mờ nền sau ô che; 0 = tắt, chỉ còn ô màu
+  cover_fade_ms: 0        # fade vào/ra (ms); >0 thì lúc fade ô che mờ → lộ chữ cũ
+  cover_extend: 0.25      # giây che dư mỗi đầu đoạn (= 1/extract.fps), bù sai số lấy mẫu OCR
+  font: Arial             # font có dấu tiếng Việt
+  font_size_ratio: 0.045  # cỡ chữ = cạnh ngắn của video × tỉ lệ
+  outline: 3
+  shadow: 1
+  position: bbox          # bbox = đặt sub mới đúng chỗ sub cũ | bottom = canh đáy
+  crf: 20
+  preset: medium
+
+watch:
+  stable_seconds: 5
+  poll_seconds: 2
+  extensions: [.mp4, .mkv, .mov, .webm]
