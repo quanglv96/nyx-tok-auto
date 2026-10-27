@@ -136,11 +136,18 @@ export async function ensureSubEnv(onStatus) {
         await run(sys.cmd, [...sys.args, '-m', 'venv', venv]);
     }
 
-    // requirements.txt đổi (cập nhật app) → cài lại
+    // requirements.txt đổi (cập nhật app) hoặc venv thiếu module subswap thực sự import → cài lại
     const req = path.join(dir, 'requirements.txt');
     const stamp = path.join(venv, 'requirements.installed');
     const want = fs.readFileSync(req, 'utf8');
-    if (fs.existsSync(stamp) && fs.readFileSync(stamp, 'utf8') === want) return result;
+    if (fs.existsSync(stamp) && fs.readFileSync(stamp, 'utf8') === want) {
+        // find_spec chỉ dò module, không import → nhanh (import paddleocr mất vài giây)
+        const missing = (await run(py, ['-c',
+            'import importlib.util as u; print(" ".join(m for m in ("paddle", "paddleocr", "cv2", "numpy", "PIL", "yaml", "tqdm", "dotenv", "anthropic") if not u.find_spec(m)))'])
+            .catch(() => 'python lỗi')).trim();
+        if (!missing) return result;
+        logWarn(TAG, `Môi trường OCR thiếu thư viện: ${missing} — cài lại`);
+    }
 
     log(TAG, '📦 Cài PaddleOCR + thư viện (lần đầu ~1 GB, khoảng 5–6 phút)...');
     // pip im lặng nhiều phút lúc tải/giải nén → đồng hồ chạy trên thanh trạng thái + log mỗi bước lớn

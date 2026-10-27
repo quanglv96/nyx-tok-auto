@@ -123,7 +123,7 @@ async function browseFacebook(page, wait, alive, tryLike) {
 
 // Lặp: B1 click 1 thẻ video ngẫu nhiên đang hiện → xem → B2 random like → B3 bấm X tắt video → B4 cuộn lưới
 async function browseXhs(page, wait, alive, tryLike) {
-    await page.goto('https://www.xiaohongshu.com/explore', {waitUntil: 'domcontentloaded', timeout: 60_000});
+    await page.goto('https://www.rednote.com/explore', {waitUntil: 'domcontentloaded', timeout: 60_000});
     const load = rnd(4000, 8000);
     log(TAG, `⏳ Chờ trang tải ${sec(load)}`);
     await wait(load);
