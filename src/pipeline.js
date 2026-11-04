@@ -11,6 +11,8 @@ import {humanSession, pickHumanSession, parseMinutes} from './human.js';
 import {sendTelegram} from './telegram.js';
 import {transformVideo, tfEnabled, tfTag, randomOpts} from './transform.js';
 import {coverSub} from './subswap.js';
+import {commentReels} from './fbComment.js';
+import {loadLinks} from './affLinks.js';
 
 const DOWNLOAD_TIMEOUT_MS = 15 * 60_000;
 const DAY_MS = 86_400_000;
@@ -127,6 +129,7 @@ export class Pipeline {
     slotOpen = false; // đã tới giờ của khung hiện tại, đang crawl/đăng
     humanSlot = null; // phiên lướt TikTok/FB kế tiếp (1 mục trong plan)
     postSlot = null; // khung đăng đang chờ / đang crawl (1 mục trong plan)
+    commentSlot = null; // lượt comment link aff kế tiếp (1 mục trong plan)
     plan = []; // lịch đã lên: {kind: 'post'|'human', start, end, at, site?, status: 'pending'|'done'|'skip'}
 
     constructor(cfg, env) {
@@ -141,6 +144,9 @@ export class Pipeline {
         this.humanMinutes = cfg.humanEnabled ? parseMinutes(cfg.humanMinutes) : null;
         this.humanSites = [cfg.humanTiktok && 'tiktok', cfg.humanFacebook && 'facebook', cfg.humanXhs && 'xiaohongshu'].filter(Boolean);
         if (cfg.humanEnabled && !this.humanSites.length) throw new Error('Đã bật human action nhưng chưa tích Lướt TikTok / Facebook / Xiaohongshu');
+        // Lịch comment link aff vào reels: mỗi khung đã tick 1 lượt vào phút ngẫu nhiên
+        this.commentSlots = cfg.fbCommentEnabled ? parseSchedule(cfg.fbCommentTimes) : [];
+        if (cfg.fbCommentEnabled && !this.commentSlots.length) throw new Error('Đã bật comment link aff nhưng chưa tick khung giờ nào');
         if (!cfg.tiktokEnabled && !cfg.fbEnabled) throw new Error('Chưa tích chọn nền tảng đăng (TikTok / Facebook)');
     }
 
@@ -157,6 +163,10 @@ export class Pipeline {
         if (this.humanSlots.length) {
             log('RUN', `🧍 Lịch lướt: ${this.humanSlots.map(s => `${hhmm(s.start)}-${hhmm(s.end)}`).join(', ')} (${this.humanMinutes.join('–')} phút/phiên)`);
             this.#planHuman();
+        }
+        if (this.commentSlots.length) {
+            log('RUN', `💬 Lịch comment link aff: ${this.commentSlots.map(s => `${hhmm(s.start)}-${hhmm(s.end)}`).join(', ')}`);
+            this.#planComment();
         }
         try {
             this.ctx = await openChrome(this.cfg);
@@ -181,13 +191,15 @@ export class Pipeline {
     // Đổi cấu hình lịch lúc đang chạy: bỏ các mục chưa chạy rồi lên lịch mới ngay, không ngắt lượt crawl/đăng/lướt đang dở
     replan(cfg) {
         const next = new Pipeline(cfg, this.env); // kiểm tra cấu hình mới như lúc Bắt đầu
-        Object.assign(this, {cfg, delayMs: next.delayMs, slots: next.slots, humanSlots: next.humanSlots, humanMinutes: next.humanMinutes, humanSites: next.humanSites});
-        const busy = e => (this.slotOpen && e === this.postSlot) || (e === this.humanSlot && Date.now() >= e.at);
+        Object.assign(this, {cfg, delayMs: next.delayMs, slots: next.slots, humanSlots: next.humanSlots, humanMinutes: next.humanMinutes, humanSites: next.humanSites,
+            commentSlots: next.commentSlots});
+        const busy = e => (this.slotOpen && e === this.postSlot) || ((e === this.humanSlot || e === this.commentSlot) && Date.now() >= e.at);
         this.plan = this.plan.filter(e => e.status !== 'pending' || busy(e));
         this.planKey = this.#planKey();
         this.#savePlan();
         log('RUN', '🔄 Đã cập nhật lịch theo cấu hình mới');
         if (!this.humanSlot || !busy(this.humanSlot)) this.#planHuman();
+        if (!this.commentSlot || !busy(this.commentSlot)) this.#planComment();
         this.replanned = true; // #waitSlot / #wait đang chờ thì tính lại mốc
     }
 
@@ -399,7 +411,7 @@ ID video: ${v.id}`);
     }
 
     #planKey() {
-        return JSON.stringify([this.slots, this.humanSlots, this.cfg.tiktokEnabled, this.cfg.fbEnabled, this.humanSites]);
+        return JSON.stringify([this.slots, this.humanSlots, this.cfg.tiktokEnabled, this.cfg.fbEnabled, this.humanSites, this.commentSlots]);
     }
 
     #savePlan() {
@@ -412,7 +424,7 @@ ID video: ${v.id}`);
         }
         const platforms = [this.cfg.tiktokEnabled && 'TikTok', this.cfg.fbEnabled && 'Facebook'].filter(Boolean).join(', ');
         const site = {tiktok: 'TikTok', facebook: 'Facebook', xiaohongshu: 'Xiaohongshu'};
-        bus.emit('plan', this.plan.map(e => ({at: e.at, status: e.status, text: e.kind === 'post' ? `Đăng ${platforms}` : `Lướt ${site[e.site]}`})));
+        bus.emit('plan', this.plan.map(e => ({at: e.at, status: e.status, text: e.kind === 'post' ? `Đăng ${platforms}` : e.kind === 'comment' ? 'Comment link aff' : `Lướt ${site[e.site]}`})));
     }
 
     #mark(e, status) {
@@ -425,7 +437,7 @@ ID video: ${v.id}`);
     #next(kind) {
         let e = this.plan.find(e => e.kind === kind && e.status === 'pending');
         if (e) return e;
-        const slots = kind === 'post' ? this.slots : this.humanSlots;
+        const slots = {post: this.slots, human: this.humanSlots, comment: this.commentSlots}[kind];
         const after = Math.max(0, ...this.plan.filter(e => e.kind === kind).map(e => e.start));
         const sites = this.humanSites;
         this.plan.push(...planDay(slots, Date.now(), after).map(s => ({
@@ -464,6 +476,7 @@ ID video: ${v.id}`);
     async #waitUntil(end, label) {
         while (this.running && Date.now() < end && !this.replanned) {
             if (this.humanSlot && Date.now() >= this.humanSlot.at) await this.#human(end);
+            if (this.running && this.commentSlot && Date.now() >= this.commentSlot.at) await this.#comment();
             // Chỉ hiện mục sắp tới gần nhất: phiên lướt (nếu tới trước) hoặc lượt chờ hiện tại
             const h = this.humanSlot;
             const [at, text] = h && h.at > Date.now() && h.at < end ? [h.at, `🧍 lướt ${h.site} lúc ${fmtTime(h.at)}`] : [end, label];
@@ -493,6 +506,32 @@ ID video: ${v.id}`);
         if (!this.running) return;
         this.#mark(this.humanSlot, 'done');
         this.#planHuman();
+    }
+
+    #planComment() {
+        if (!this.commentSlots.length) return this.commentSlot = null;
+        this.commentSlot = this.#next('comment');
+        log('FBCMT', `💬 Hẹn comment link aff lúc ${fmtTime(this.commentSlot.at)}`);
+    }
+
+    // Comment link aff trong lúc chờ (1 lượt / khung). Hết khung mà chưa rảnh thì bỏ, sang khung kế
+    async #comment() {
+        if (Date.now() > this.commentSlot.end) {
+            logWarn('FBCMT', 'Hết khung comment mà chưa có lúc rảnh — bỏ lượt này');
+            this.#mark(this.commentSlot, 'skip');
+            return this.#planComment();
+        }
+        setStep(0, 'wait', '💬 comment link aff');
+        try {
+            await commentReels(this.ctx, this.cfg, loadLinks(this.cfg.dataDir), {notify: t => this.#notify(t), isRunning: () => this.running});
+        } catch (err) {
+            if (!this.running) return;
+            logError('FBCMT', `Lượt comment link aff lỗi: ${err.message}`);
+            await this.#notify(`❌ Comment link aff lỗi\n${err.message}`);
+        }
+        if (!this.running) return;
+        this.#mark(this.commentSlot, 'done');
+        this.#planComment();
     }
 
     #emitStats() {

@@ -3,7 +3,8 @@ const {ipcRenderer} = require('electron');
 const $ = id => document.getElementById(id);
 const FIELDS = ['dataDir', 'searchUrls', 'xhsUrls', 'pinterestEnabled', 'xhsEnabled', 'caption', 'tiktokEnabled', 'fbEnabled', 'fbHashtags', 'videosPerUrl', 'delayMinutes', 'maxScrolls',
     'chromePath', 'chromeProfileDir', 'telegramToken', 'telegramAdmin', 'scheduleEnabled', 'scheduleTimes', 'humanEnabled', 'humanTiktok', 'humanFacebook', 'humanXhs', 'humanLikeRate', 'humanTimes','humanMinutes', 'autoStart', 'autoRun',
-    'tfRandom', 'tfRotate', 'tfColor', 'tfFps', 'tfAudio', 'tfPip', 'reactionPath', 'subCover'];
+    'tfRandom', 'tfRotate', 'tfColor', 'tfFps', 'tfAudio', 'tfPip', 'reactionPath', 'subCover',
+    'fbCommentEnabled', 'fbProfileUrl', 'fbCommentCount', 'fbCommentTemplate', 'fbCommentMaxScrolls', 'fbCommentTimes'];
 const STEPS = ['B1 Truy cập nguồn', 'B2 Quét video', 'B3 Lọc video mới', 'B4 Tải video', 'B5 Đăng TikTok', 'B6 Đăng Facebook', 'B7 Thông báo & xoá'];
 const MAX_LOG_LINES = 1500;
 
@@ -186,7 +187,8 @@ function hourGrid(gridId, field, countId) {
     };
     return {field, load};
 }
-const HOUR_GRIDS = [hourGrid('hourGrid', 'scheduleTimes', 'hourCount'), hourGrid('humanHourGrid', 'humanTimes', 'humanHourCount')];
+const HOUR_GRIDS = [hourGrid('hourGrid', 'scheduleTimes', 'hourCount'), hourGrid('humanHourGrid', 'humanTimes', 'humanHourCount'),
+    hourGrid('commentHourGrid', 'fbCommentTimes', 'commentHourCount')];
 
 $('btnSave').onclick =() => call('save-config', readForm());
 $('btnStart').onclick = async () => {
@@ -319,6 +321,7 @@ const TESTS = {
     'human-tiktok': () => call('test-human', 'tiktok', $('tHumanMin').value, readForm()),
     'human-facebook': () => call('test-human', 'facebook', $('tHumanMin').value, readForm()),
     'human-xhs': () => call('test-human', 'xiaohongshu', $('tHumanMin').value, readForm()),
+    'fb-comment': async () => confirm('Comment THẬT link aff vào reels?') && (await call('save-config', readForm()), call('test-fb-comment', readForm())),
 };
 document.querySelectorAll('[data-test]').forEach(btn => btn.onclick = async () => {
     const all = document.querySelectorAll('.tbtn');

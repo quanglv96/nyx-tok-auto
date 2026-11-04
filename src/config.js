@@ -33,6 +33,13 @@ const defaults = () => ({
     humanLikeRate: 10,     // % video/post được like, tối đa 3 like / phiên
     humanTimes: '08:00-09:00, 11:00-12:00, 15:00-16:00, 21:00-22:00', // tick theo giờ trên UI, mỗi khung 1 phiên
     humanMinutes: '3-12',  // thời lượng mỗi phiên (phút)
+    // Comment link affiliate (link.update) vào reels của page (src/fbComment.js)
+    fbCommentEnabled: false,
+    fbProfileUrl: 'https://www.facebook.com/profile.php?id=61595255017435&sk=reels_tab',
+    fbCommentCount: '2-5',  // số reel mỗi lượt (random trong khoảng)
+    fbCommentTemplate: '{name} 👉 {link}',
+    fbCommentMaxScrolls: 3,
+    fbCommentTimes: '10:00-11:00, 19:00-20:00', // tick theo giờ trên UI, mỗi khung 1 lượt
     // Xử lý video bằng ffmpeg — các tuỳ chọn kết hợp tự do (xem src/transform.js)
     tfRandom: true,        // mỗi video random ≥1 hiệu ứng trong các ô đã tick (không tick = tất cả)
     tfRotate: false,
