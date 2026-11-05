@@ -138,6 +138,7 @@
                 <button data-view="cfgSchedule">Lịch đăng</button>
                 <button data-view="cfgTransform">Xử lý video</button>
                 <button data-view="cfgHuman">Human action</button>
+                <button data-view="cfgComment">Comment link aff</button>
                 <button data-view="cfgChrome">Chrome</button>
                 <button data-view="cfgTelegram">Telegram</button>
             </nav>
@@ -225,6 +226,23 @@
                 <div class="hint">Giống lịch đăng: mỗi khung đã tick lướt 1 phiên vào phút ngẫu nhiên trong giờ đó. Chỉ lướt lúc đang chờ và luôn xong trước giờ crawl/đăng 2 phút; tới giờ mà đang đăng thì lướt ở lần chờ sau, hết khung thì bỏ. Mỗi phiên chọn ngẫu nhiên TikTok / Facebook / Xiaohongshu trong các ô đã tick ở trên. Tối đa 3 like / phiên.</div>
             </div>
 
+            <div class="panel" id="cfgComment" hidden>
+                <label class="check"><input type="checkbox" id="fbCommentEnabled"> Lúc chờ comment link affiliate (link.update) vào reels của page theo khung giờ</label>
+                <label>Link trang reels của page</label>
+                <input id="fbProfileUrl">
+                <div class="grid2">
+                    <div><label>Số reel mỗi lượt (vd 2-5)</label><input id="fbCommentCount" placeholder="2-5"></div>
+                    <div><label>Cuộn tối đa</label><input id="fbCommentMaxScrolls" type="number" min="0"></div>
+                </div>
+                <label>Mẫu comment ({name} = tên SP, {link} = link)</label>
+                <input id="fbCommentTemplate" placeholder="{name} 👉 {link}">
+                <label>Khung giờ comment</label>
+                <input id="fbCommentTimes" type="hidden">
+                <div id="commentHourGrid" class="hour-grid"></div>
+                <div class="hour-picked" id="commentHourCount"></div>
+                <div class="hint">Mỗi khung đã tick 1 lượt vào phút ngẫu nhiên. ~70% reel mới (10 reel đầu) / 30% reel cũ, mỗi reel 1 SP chưa từng comment vào reel đó. Link SP cập nhật từ beacons.ai/pinmeow khi mở app (file cũ hơn 24h).</div>
+            </div>
+
             <div class="panel" id="cfgChrome" hidden>
                 <label>Đường dẫn chrome.exe (trống = tự tìm)</label>
                 <div class="row"><input id="chromePath"><button data-pick-file="chromePath">…</button></div>
@@ -277,6 +295,9 @@
                     <button class="tbtn" data-test="human-xhs">▶ Human Xiaohongshu</button>
                 </div>
                 <div class="hint">Lướt trong số phút đã nhập, tỷ lệ like theo Cấu hình → Human action.</div>
+                <h3>Comment link aff</h3>
+                <div class="row"><button class="tbtn" data-test="fb-comment">▶ Comment link aff</button></div>
+                <div class="hint">⚠️ Comment thật vào reels theo Cấu hình → Comment link aff (tự Lưu cấu hình trước khi chạy).</div>
                 <div class="actions"><button id="btnTestStop" class="danger" disabled>■ Dừng test</button></div>
                 <div class="hint">Dừng có hiệu lực với crawl / human; đang đăng thì đóng cửa sổ Chrome để huỷ.</div>
                 <div id="testLogs" class="logbox"></div>

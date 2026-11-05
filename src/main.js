@@ -15,6 +15,8 @@ import {humanSession} from './human.js';
 import {transformVideo, tfTag, cmdLine, randomOpts} from './transform.js';
 import {openChrome} from './chrome.js';
 import {sendTelegram} from './telegram.js';
+import {refreshOnStartup, loadLinks} from './affLinks.js';
+import {commentReels} from './fbComment.js';
 import {setupAutoUpdater} from './updater.js';
 import {VERSION} from './version.js';
 
@@ -242,6 +244,11 @@ ipcMain.handle('test-tiktok', (_, file, cfg) => (needFile(file), runTest('Đăng
 ipcMain.handle('test-facebook', (_, file, cfg) => (needFile(file), runTest('Đăng Facebook', ctx => uploadToFacebook(ctx, file, cfg.fbHashtags || cfg.caption))));
 ipcMain.handle('test-human', (_, site, minutes, cfg) => runTest(`Human ${site} ${minutes} phút`, ctx =>
     humanSession(ctx, site, Date.now() + Math.max(1, Number(minutes) || 3) * 60_000, () => testRunning, Number(cfg.humanLikeRate) || 0)));
+// Comment link aff: cfg từ form (đã Lưu ở renderer), link lấy từ <dataDir>/link.update
+ipcMain.handle('test-fb-comment', (_, cfg) => runTest('Comment link aff', ctx => {
+    const conf = {...loadConfig(), ...cfg};
+    return commentReels(ctx, conf, loadLinks(conf.dataDir), {notify: text => sendTelegram(conf, text).catch(() => {}), isRunning: () => testRunning});
+}));
 ipcMain.handle('test-stop', () => { if (testRunning) log('TEST', '⏹️ Đang dừng test...'); testRunning = false; });
 
 ipcMain.handle('test-telegram', async () => {
@@ -267,6 +274,7 @@ app.whenReady().then(() => {
     setLogDir(path.join(loadConfig().dataDir, 'logs'));
     if (app.isPackaged) app.setLoginItemSettings({openAtLogin: !!loadConfig().autoStart});
     createWindow();
+    refreshOnStartup(loadConfig()).catch(err => logError('AFF', err.message)); // chạy nền, không chặn UI
 });
 
 app.on('window-all-closed', async () => {
