@@ -321,6 +321,7 @@ const TESTS = {
     'human-tiktok': () => call('test-human', 'tiktok', $('tHumanMin').value, readForm()),
     'human-facebook': () => call('test-human', 'facebook', $('tHumanMin').value, readForm()),
     'human-xhs': () => call('test-human', 'xiaohongshu', $('tHumanMin').value, readForm()),
+    'aff-crawl': () => call('test-aff-crawl', $('tAffUrl').value.trim()),
     'fb-comment': async () => confirm('Comment THẬT link aff vào reels?') && (await call('save-config', readForm()), call('test-fb-comment', readForm())),
 };
 document.querySelectorAll('[data-test]').forEach(btn => btn.onclick = async () => {

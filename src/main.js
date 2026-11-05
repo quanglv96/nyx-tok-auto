@@ -15,7 +15,7 @@ import {humanSession} from './human.js';
 import {transformVideo, tfTag, cmdLine, randomOpts} from './transform.js';
 import {openChrome} from './chrome.js';
 import {sendTelegram} from './telegram.js';
-import {refreshOnStartup, loadLinks} from './affLinks.js';
+import {refreshOnStartup, loadLinks, refreshLinks} from './affLinks.js';
 import {commentReels} from './fbComment.js';
 import {setupAutoUpdater} from './updater.js';
 import {VERSION} from './version.js';
@@ -248,6 +248,12 @@ ipcMain.handle('test-human', (_, site, minutes, cfg) => runTest(`Human ${site} $
 ipcMain.handle('test-fb-comment', (_, cfg) => runTest('Comment link aff', ctx => {
     const conf = {...loadConfig(), ...cfg};
     return commentReels(ctx, conf, loadLinks(conf.dataDir), {notify: text => sendTelegram(conf, text).catch(() => {}), isRunning: () => testRunning});
+}));
+// Crawl danh mục SP (link aff) từ URL (trống = Beacons mặc định) → ghi <dataDir>/link.update
+ipcMain.handle('test-aff-crawl', (_, url) => runTest('Crawl danh mục sản phẩm', async ctx => {
+    const items = await refreshLinks(ctx, loadConfig().dataDir, url || undefined);
+    if (!items) throw new Error('Crawl danh mục sản phẩm lỗi — xem log');
+    return items.length;
 }));
 ipcMain.handle('test-stop', () => { if (testRunning) log('TEST', '⏹️ Đang dừng test...'); testRunning = false; });
 

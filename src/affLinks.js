@@ -49,11 +49,12 @@ export function needRefresh(file, now = Date.now()) {
 export const loadLinks = dataDir => readFile(linksFile(dataDir))?.items ?? [];
 
 // Crawl Beacons bằng ctx (Playwright BrowserContext) → ghi link.update. Lỗi / 0 link: giữ file cũ, trả null.
-export async function refreshLinks(ctx, dataDir) {
+export async function refreshLinks(ctx, dataDir, url = BEACONS_URL) {
     let page;
     try {
         page = await ctx.newPage();
-        await page.goto(BEACONS_URL, {waitUntil: 'domcontentloaded', timeout: 60_000});
+        log(TAG, `🌐 Mở ${url}`);
+        await page.goto(url, {waitUntil: 'domcontentloaded', timeout: 60_000});
         await page.waitForSelector('a .text-sm-normal', {timeout: 30_000}).catch(() => {});
         const items = parseBeacons(await page.content());
         if (!items.length) throw new Error('không tìm thấy link sản phẩm nào');
