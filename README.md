@@ -50,6 +50,14 @@ npm install
 npm start
 npm test
 ```
-Release: tăng `version` trong `package.json`, push tag `vX.Y.Z` → GitHub Actions build NSIS và publish lên `quanglv96/nyx-tok-auto`. App đã cài sẽ tự kiểm tra bản mới khi khởi động:
+Release: tăng `version` trong `package.json`, push tag `vX.Y.Z` → GitHub Actions (`.github/workflows/release.yml`) build NSIS và publish lên `quanglv96/nyx-tok-auto`:
+```
+npm test
+npm version patch -m "release v%s"   # 1.0.14 -> 1.0.15: sửa package.json + package-lock.json, commit, tạo tag v1.0.15
+git push origin HEAD --follow-tags   # push commit + tag -> Actions tự build & publish
+```
+(`npm version minor` / `major` để tăng số giữa/đầu. Theo dõi build ở tab Actions của repo.)
+
+App đã cài sẽ tự kiểm tra bản mới khi khởi động:
 - Chỉ sửa code (`dependencies` + bản Electron giữ nguyên) → chỉ tải `code.tgz` (vài KB) vào `%APPDATA%/NTT Auto/code/<version>`, khởi động lại là chạy bản mới. Python/venv/Chrome profile không bị cài lại.
 - Đổi `dependencies` hoặc Electron → tải bộ cài NSIS đầy đủ (electron-updater).
